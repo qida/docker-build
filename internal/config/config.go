@@ -34,6 +34,7 @@ type RepositoryConfig struct {
 	DockerfileUser    string            `yaml:"dockerfile_user,omitempty"`
 	Enabled           *bool             `yaml:"enabled,omitempty"`
 	Cron              string            `yaml:"cron,omitempty"`
+	Timeout           string            `yaml:"timeout,omitempty"`
 }
 
 type Config struct {

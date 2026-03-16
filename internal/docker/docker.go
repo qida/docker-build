@@ -169,6 +169,7 @@ func (c *Client) BuildImage(ctx context.Context, contextDir, imageName string, p
 			"-f", dockerfile,
 			"-t", imageName,
 			"--push",
+			"--progress=plain",
 			"-",
 		)
 
