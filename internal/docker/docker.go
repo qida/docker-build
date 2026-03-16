@@ -55,6 +55,7 @@ func (c *Client) BuildImageWithProxy(ctx context.Context, contextDir, imageName 
 			"-f", dockerfile,
 			"-t", imageName,
 			"--push",
+			"--progress=plain",
 			"-",
 		)
 
