@@ -1,0 +1,120 @@
+package scheduler
+
+import (
+	"log"
+	"sync"
+	"time"
+
+	"docker-build/internal/config"
+	"docker-build/internal/docker"
+	"docker-build/internal/github"
+
+	"github.com/robfig/cron/v3"
+)
+
+type Scheduler struct {
+	mu            sync.RWMutex
+	cronScheduler *cron.Cron
+	cfg           *config.Config
+	githubClient  *github.Client
+	dockerClient  *docker.Client
+}
+
+func NewScheduler() *Scheduler {
+	return &Scheduler{
+		cronScheduler: cron.New(cron.WithLocation(time.Local)),
+	}
+}
+
+func (s *Scheduler) SetConfig(cfg *config.Config) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.cfg = cfg
+}
+
+func (s *Scheduler) SetClients(githubClient *github.Client, dockerClient *docker.Client) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.githubClient = githubClient
+	s.dockerClient = dockerClient
+}
+
+func (s *Scheduler) Start() {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	for _, repo := range s.cfg.Repositories {
+		if repo.Enabled != nil && !*repo.Enabled {
+			log.Printf("[INFO] Skipping disabled repository: %s\n", repo.URL)
+			continue
+		}
+
+		if repo.Cron == "" {
+			log.Printf("[INFO] Building immediately (cron not set): %s\n", repo.URL)
+			go buildRepositoryTask(s.cfg, s.githubClient, s.dockerClient, repo)
+		} else {
+			if repo.URL == "" {
+				log.Printf("[INFO] Scheduled build with cron '%s': %s\n", repo.Cron, repo.DockerfileUser)
+			} else {
+				log.Printf("[INFO] Scheduled build with cron '%s': %s\n", repo.Cron, repo.URL)
+			}
+			_, err := s.cronScheduler.AddFunc(repo.Cron, func() {
+				log.Printf("[INFO] Starting scheduled build for %s\n", repo.URL)
+				go buildRepositoryTask(s.cfg, s.githubClient, s.dockerClient, repo)
+			})
+			if err != nil {
+				log.Printf("[ERROR] Failed to schedule build for %s: %v\n", repo.URL, err)
+			}
+		}
+	}
+
+	s.cronScheduler.Start()
+	log.Println("[INFO] Cron scheduler started")
+}
+
+func (s *Scheduler) Restart() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if s.cronScheduler != nil {
+		s.cronScheduler.Stop()
+	}
+
+	s.cronScheduler = cron.New(cron.WithLocation(time.Local))
+
+	for _, repo := range s.cfg.Repositories {
+		if repo.Enabled != nil && !*repo.Enabled {
+			log.Printf("[INFO] Skipping disabled repository: %s\n", repo.URL)
+			continue
+		}
+
+		if repo.Cron == "" {
+			log.Printf("[INFO] Building immediately (cron not set): %s\n", repo.URL)
+			go buildRepositoryTask(s.cfg, s.githubClient, s.dockerClient, repo)
+		} else {
+			if repo.URL == "" {
+				log.Printf("[INFO] Scheduled build with cron '%s': %s\n", repo.Cron, repo.DockerfileUser)
+			} else {
+				log.Printf("[INFO] Scheduled build with cron '%s': %s\n", repo.Cron, repo.URL)
+			}
+			_, err := s.cronScheduler.AddFunc(repo.Cron, func() {
+				log.Printf("[INFO] Starting scheduled build for %s\n", repo.URL)
+				go buildRepositoryTask(s.cfg, s.githubClient, s.dockerClient, repo)
+			})
+			if err != nil {
+				log.Printf("[ERROR] Failed to schedule build for %s: %v\n", repo.URL, err)
+			}
+		}
+	}
+
+	s.cronScheduler.Start()
+	log.Println("[INFO] Cron scheduler restarted")
+}
+
+func (s *Scheduler) Stop() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.cronScheduler != nil {
+		s.cronScheduler.Stop()
+	}
+}
