@@ -1,0 +1,55 @@
+docker_hub:
+  username: "name"
+  password: "dckr_pat_fYrK7Smu5xx"
+
+github:
+  username: "name"
+  token: "ghp_vcmnfoS75jweJxxxxxx"
+
+proxy:
+  enabled: false
+  http: "http://192.168.100.3:2080"
+  https: "http://192.168.100.3:2080"
+  no_proxy: "localhost,127.0.0.1"
+
+repositories:
+  - url: "https://github.com/sipeed/picoclaw"
+    enabled: false
+    branch: "main"
+    tag: "latest"
+    dockerfile_project: "docker/Dockerfile"
+    platforms:
+      - "linux/amd64"
+      - "linux/arm64"
+    build_args:
+      VERSION: "1.0.0"
+      BUILD_DATE: "2026-03-12"
+  - url: "https://github.com/YspCoder/clawgo"
+    enabled: false
+    branch: "main"
+    tag: "latest"
+    dockerfile_project: "Dockerfile"
+    platforms:
+      - "linux/amd64"
+    build_args:
+      GO_VERSION: "1.21"
+  - url: "https://github.com/ntop/n2n"
+    enabled: false
+    branch: "master"
+    tag: "latest"
+    dockerfile_user: "dockerfile/n2n/Dockerfile"
+    platforms:
+      - "linux/amd64"
+      - "linux/arm64"
+    build_args:
+      GO_VERSION: "1.21"      
+  - url: ""
+    enabled: true
+    branch: "master"
+    tag: "latest"
+    dockerfile_user: "dockerfile/go-thrift/Dockerfile"
+    platforms:
+      - "linux/amd64"
+      - "linux/arm64"
+    build_args:
+      THRIFT_VERSION: "latest"           
