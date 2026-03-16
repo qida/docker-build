@@ -1,3 +1,5 @@
 docker-build
+*.exe
+
 go.sum
 config.yaml

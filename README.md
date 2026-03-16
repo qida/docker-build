@@ -35,13 +35,13 @@
 │  │  Config      │  │  GitHub      │  │  Docker      │       │
 │  │  Parser      │──│  Client      │──│  Client      │       │
 │  └──────────────┘  └──────────────┘  └──────────────┘       │
-│                        │                  │                   │
-│                        ▼                  ▼                   │
-│              ┌──────────────────┐  ┌──────────────┐          │
-│              │  Repository      │  │  Buildx      │          │
-│              │  Operations      │  │  Multi-      │          │
-│              │                  │  │  Platform    │          │
-│              └──────────────────┘  └──────────────┘          │
+│                        │                  │                 │
+│                        ▼                  ▼                 │
+│              ┌──────────────────┐  ┌──────────────┐         │
+│              │  Repository      │  │  Buildx      │         │
+│              │  Operations      │  │  Multi-      │         │
+│              │                  │  │  Platform    │         │
+│              └──────────────────┘  └──────────────┘         │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -259,28 +259,8 @@ repositories:
 
 **注意：** `dockerfile_user` 优先级高于 `dockerfile_project`，会覆盖仓库中的任何 Dockerfile。
 
-### 示例 5：本地上下文构建
 
-当 `url` 为空时，使用本地目录作为构建上下文，跳过 git clone：
-
-```yaml
-repositories:
-  - context_dir: "/path/to/local/project"
-    branch: "main"
-    tag: "latest"
-    dockerfile_user: "./dockerfile/Dockerfile"
-    platforms:
-      - "linux/amd64"
-```
-
-构建镜像：`qida/project:latest`
-
-**说明：**
-- `url` 配置为空字符串 `""`
-- `context_dir` 指定本地目录路径
-- 适用于本地开发测试或无法访问 GitHub 的场景
-
-### 示例 6：传递构建参数
+### 示例 5：传递构建参数
 
 使用 ARG 参数构建：
 
@@ -296,7 +276,7 @@ repositories:
       BUILD_DATE: "2026-03-12"
 ```
 
-### 示例 7：组合使用
+### 示例 6：组合使用
 
 结合所有功能的完整示例：
 
@@ -318,8 +298,7 @@ repositories:
     build_args:
       VERSION: "1.0.0"
       BUILD_DATE: "2026-03-12"
-
-  - context_dir: "/local/path/to/project2"
+  - url: "https://github.com/example/project2"
     enabled: true
     branch: "dev"
     tag: "v1.0"
@@ -338,7 +317,7 @@ repositories:
 
 ```yaml
 repositories:
-  - context_dir: "/path/to/local/project"
+  - url: "https://github.com/example/project"
     branch: "main"
     tag: "latest"
     dockerfile_user: "./dockerfile/Dockerfile"
