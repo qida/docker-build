@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -37,13 +38,15 @@ func (c *Client) SetProxyConfig(proxyCfg *config.ProxyConfig) {
 	c.proxyCfg = proxyCfg
 }
 
-func (c *Client) BuildImageWithProxy(ctx context.Context, contextDir, imageName string, platforms []string, buildArgs map[string]string, dockerfile string, proxyConfig *config.ProxyConfig) error {
+// 有git，从远程构建镜像
+func (c *Client) BuildImagea(ctx context.Context, contextDir, imageName string, platforms []string, buildArgs map[string]string, dockerfilePath string, proxyConfig *config.ProxyConfig) error {
+	log.Printf("[DOCKER] Building image %s from context %s with Dockerfile %s...\n", imageName, contextDir, dockerfilePath)
 	if proxyConfig != nil && proxyConfig.Enabled {
 		fmt.Printf("[DOCKER] Using proxy: HTTP=%s, HTTPS=%s\n", proxyConfig.HTTP, proxyConfig.HTTPS)
 	}
 
-	if dockerfile == "" {
-		dockerfile = "Dockerfile"
+	if dockerfilePath == "" {
+		dockerfilePath = "Dockerfile"
 	}
 
 	if len(platforms) > 0 {
@@ -52,7 +55,7 @@ func (c *Client) BuildImageWithProxy(ctx context.Context, contextDir, imageName 
 		tarCmd := exec.CommandContext(ctx, "tar", "cf", "-", "-C", contextDir, ".")
 		buildxCmd := exec.CommandContext(ctx, "docker", "buildx", "build",
 			"--platform", strings.Join(platforms, ","),
-			"-f", dockerfile,
+			"-f", dockerfilePath,
 			"-t", imageName,
 			"--push",
 			"--progress=plain",
@@ -105,8 +108,8 @@ func (c *Client) BuildImageWithProxy(ctx context.Context, contextDir, imageName 
 			args = append(args, "--build-arg", fmt.Sprintf("%s=%s", k, v))
 		}
 
-		if dockerfile != "Dockerfile" {
-			args = append(args, "-f", dockerfile)
+		if dockerfilePath != "Dockerfile" {
+			args = append(args, "-f", dockerfilePath)
 		}
 
 		if proxyConfig != nil && proxyConfig.Enabled {
@@ -152,68 +155,6 @@ func (c *Client) EnsureBuildxBuilder(ctx context.Context) error {
 		fmt.Println("[DOCKER] Using existing multiarch-builder")
 	}
 	return nil
-}
-
-func (c *Client) BuildImage(ctx context.Context, contextDir, imageName string, platforms []string, buildArgs map[string]string, dockerfile string) error {
-	if dockerfile == "" {
-		dockerfile = "Dockerfile"
-	}
-
-	if len(platforms) > 0 {
-		fmt.Printf("[DOCKER] Building for platforms: %s\n", strings.Join(platforms, ", "))
-
-		// 使用 stdin 传递 context 给 buildx
-		tarCmd := exec.CommandContext(ctx, "tar", "cf", "-", "-C", contextDir, ".")
-		buildxCmd := exec.CommandContext(ctx, "docker", "buildx", "build",
-			"--platform", strings.Join(platforms, ","),
-			"-f", dockerfile,
-			"-t", imageName,
-			"--push",
-			"--progress=plain",
-			"-",
-		)
-
-		for k, v := range buildArgs {
-			buildxCmd.Args = append(buildxCmd.Args, "--build-arg", fmt.Sprintf("%s=%s", k, v))
-		}
-
-		tarStdout, err := tarCmd.StdoutPipe()
-		if err != nil {
-			return fmt.Errorf("failed to create tar pipe: %v", err)
-		}
-		buildxCmd.Stdin = tarStdout
-
-		buildxCmd.Stdout = os.Stdout
-		buildxCmd.Stderr = os.Stderr
-
-		if err := tarCmd.Start(); err != nil {
-			return fmt.Errorf("failed to start tar: %v", err)
-		}
-
-		if err := buildxCmd.Start(); err != nil {
-			tarCmd.Wait()
-			return fmt.Errorf("failed to start buildx: %v", err)
-		}
-
-		tarCmd.Wait()
-		return buildxCmd.Wait()
-	} else {
-		args := []string{"build", "-t", imageName, contextDir}
-
-		for k, v := range buildArgs {
-			args = append(args, "--build-arg", fmt.Sprintf("%s=%s", k, v))
-		}
-
-		if dockerfile != "Dockerfile" {
-			args = append(args, "-f", dockerfile)
-		}
-
-		buildCmd := exec.CommandContext(ctx, "docker", args...)
-		buildCmd.Stdout = os.Stdout
-		buildCmd.Stderr = os.Stderr
-
-		return buildCmd.Run()
-	}
 }
 
 func (c *Client) PushImage(ctx context.Context, imageName, username, password string) error {
