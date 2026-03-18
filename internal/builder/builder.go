@@ -46,7 +46,7 @@ func BuildRepository(ctx context.Context, cfg *config.Config, githubClient *gith
 		return err
 	}
 	//执行构建
-	imageName := getImageName(repo.Branch, cfg.DockerHub.Username, getRepoName(&repo), repo.Tag)
+	imageName := getImageName(repo.Branch, cfg.DockerHub.Username, getRepoName(&repo), repo.DockerTag)
 	log.Printf("[INFO] Building and pushing Docker image: %s...\n", imageName)
 	var buildErr error
 	buildErr = dockerClient.BuildImage(ctx, contextDir, dockerfilePath, imageName, repo.Platforms, repo.BuildArgs, cfg.Proxy)
@@ -69,7 +69,7 @@ func CloneRepository(ctx context.Context, contextDir string, repo *config.Reposi
 		return fmt.Errorf("branch %s does not exist", repo.Branch)
 	}
 	//clone repository
-	if err := cloneRepository(ctx, repo.URL, branch, repo.Tag, contextDir); err != nil {
+	if err := cloneRepository(ctx, repo.URL, branch, contextDir); err != nil {
 		log.Printf("[ERROR] Failed to clone %s (branch %s): %v\n", repo.URL, branch, err)
 		return err
 	}
@@ -78,46 +78,32 @@ func CloneRepository(ctx context.Context, contextDir string, repo *config.Reposi
 }
 
 func isBranchExist(repo config.RepositoryConfig, githubClient *github.Client) (string, bool) {
-	if repo.Branch == "" {
-		branch, err := githubClient.GetDefaultBranch(repo.URL)
-		if err != nil {
-			log.Printf("[ERROR] Failed to get default branch for %s: %v\n", repo.URL, err)
-			return "", false
-		}
-		log.Printf("[INFO] No branch specified, using default: %s\n", branch)
-		return branch, true
-	}
 	valid, err := githubClient.ValidateBranch(repo.URL, repo.Branch)
 	if err != nil {
 		log.Printf("[ERROR] Failed to validate branch %s for %s: %v\n", repo.Branch, repo.URL, err)
 		return "", false
 	}
-	if !valid {
-		log.Printf("[ERROR] Branch %s does not exist in %s\n", repo.Branch, repo.URL)
+	if valid {
+		return repo.Branch, true
+	}
+	//如果用户没有指定branch,则默认使用默认分支
+	branch, err := githubClient.GetDefaultBranch(repo.URL)
+	if err != nil {
+		log.Printf("[ERROR] Failed to get default branch for %s: %v\n", repo.URL, err)
 		return "", false
 	}
-	log.Printf("[INFO] Using branch: %s\n", repo.Branch)
-	return repo.Branch, true
+	log.Printf("[INFO] No branch specified, using default: %s\n", branch)
+	return branch, true
 }
-func cloneRepository(ctx context.Context, repoURL, branch, tag, contextDir string) error {
+func cloneRepository(ctx context.Context, repoURL, branch, contextDir string) error {
 	var cmd *exec.Cmd
-
-	if tag != "" && tag != "latest" {
-		log.Printf("[INFO] Cloning repository (tag: %s) to %s...\n", tag, contextDir)
-		cmd = exec.CommandContext(ctx, "git", "clone",
-			"--branch", tag,
-			"--depth", "1",
-			"--single-branch",
-			repoURL, contextDir)
-	} else {
-		log.Printf("[INFO] Cloning repository (branch: %s) to %s...\n", branch, contextDir)
-		cmd = exec.CommandContext(ctx, "git", "clone",
-			"--branch", branch,
-			"--depth", "1",
-			"--single-branch",
-			"--no-tags",
-			repoURL, contextDir)
-	}
+	log.Printf("[INFO] Cloning repository (branch: %s) to %s...\n", branch, contextDir)
+	cmd = exec.CommandContext(ctx, "git", "clone",
+		"--branch", branch,
+		"--depth", "1",
+		"--single-branch",
+		"--no-tags",
+		repoURL, contextDir)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	return cmd.Run()

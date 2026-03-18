@@ -25,16 +25,18 @@ type ProxyConfig struct {
 }
 
 type RepositoryConfig struct {
-	URL               string            `yaml:"url,omitempty"`
-	Branch            string            `yaml:"branch,omitempty"`
-	Tag               string            `yaml:"tag,omitempty"`
+	Enabled *bool  `yaml:"enabled,omitempty"`
+	URL     string `yaml:"url,omitempty"`
+
+	Branch            string            `yaml:"branch,omitempty"`     // 用于clone repository的branch
+	DockerTag         string            `yaml:"docker_tag,omitempty"` // 仅用于镜像名称的tag
 	Platforms         []string          `yaml:"platforms,omitempty"`
 	BuildArgs         map[string]string `yaml:"build_args,omitempty"`
 	DockerfileProject string            `yaml:"dockerfile_project,omitempty"`
 	DockerfileUser    string            `yaml:"dockerfile_user,omitempty"`
-	Enabled           *bool             `yaml:"enabled,omitempty"`
-	Cron              string            `yaml:"cron,omitempty"`
-	Timeout           string            `yaml:"timeout,omitempty"`
+
+	Cron    string `yaml:"cron,omitempty"`
+	Timeout string `yaml:"timeout,omitempty"`
 }
 
 type Config struct {
@@ -73,11 +75,24 @@ func LoadConfig(filePath string) (*Config, error) {
 	}
 
 	for i, repo := range config.Repositories {
-		if repo.Tag == "" {
-			config.Repositories[i].Tag = "latest"
+
+		// if repo.Tag == "" {
+		// 	config.Repositories[i].Tag = "latest"
+		// }
+
+		if repo.Branch == "" {
+			config.Repositories[i].Branch = "main"
+		}
+		if repo.Platforms == nil {
+			config.Repositories[i].Platforms = []string{"linux/amd64"}
+		}
+		if repo.DockerfileProject == "" {
+			config.Repositories[i].DockerfileProject = "Dockerfile"
+		}
+		if repo.URL == "" && repo.DockerfileUser == "" {
+			return nil, errMissingFieldAt("repositories", i, "url or dockerfile_user")
 		}
 	}
-
 	return &config, nil
 }
 
