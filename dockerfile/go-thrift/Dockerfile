@@ -10,6 +10,7 @@ RUN apt-get install libboost-dev libboost-test-dev \
     libboost-program-options-dev libboost-system-dev \
     libboost-filesystem-dev libevent-dev automake \
     libtool flex bison pkg-config libssl-dev wget pip \
+    autoconf g++ libboost-all-dev python3-pip python3-setuptools \
     -y
 RUN if [ -z "$_THRIFT_VERSION" ] || [ "$_THRIFT_VERSION" = "latest" ]; then \
     _THRIFT_VERSION=$(curl -s https://api.github.com/repos/apache/thrift/releases/latest | grep '"tag_name"' | sed -E 's/.*"tag_name": "v?([0-9.]+)".*/\1/');\
