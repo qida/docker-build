@@ -8,11 +8,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strings"
 
 	"docker-build/internal/config"
 
@@ -36,103 +34,6 @@ func NewClient() (*Client, error) {
 
 func (c *Client) SetProxyConfig(proxyCfg *config.ProxyConfig) {
 	c.proxyCfg = proxyCfg
-}
-
-// 有git，从远程构建镜像
-func (c *Client) BuildImagea(ctx context.Context, contextDir, imageName string, platforms []string, buildArgs map[string]string, dockerfilePath string, proxyConfig *config.ProxyConfig) error {
-	log.Printf("[DOCKER] Building image %s from context %s with Dockerfile %s...\n", imageName, contextDir, dockerfilePath)
-	if proxyConfig != nil && proxyConfig.Enabled {
-		fmt.Printf("[DOCKER] Using proxy: HTTP=%s, HTTPS=%s\n", proxyConfig.HTTP, proxyConfig.HTTPS)
-	}
-
-	if dockerfilePath == "" {
-		dockerfilePath = "Dockerfile"
-	}
-
-	if len(platforms) > 0 {
-		fmt.Printf("[DOCKER] Building for platforms: %s\n", strings.Join(platforms, ", "))
-
-		tarCmd := exec.CommandContext(ctx, "tar", "cf", "-", "-C", contextDir, ".")
-		buildxCmd := exec.CommandContext(ctx, "docker", "buildx", "build",
-			"--platform", strings.Join(platforms, ","),
-			"-f", dockerfilePath,
-			"-t", imageName,
-			"--push",
-			"--progress=plain",
-			"-",
-		)
-
-		for k, v := range buildArgs {
-			buildxCmd.Args = append(buildxCmd.Args, "--build-arg", fmt.Sprintf("%s=%s", k, v))
-		}
-
-		if proxyConfig != nil && proxyConfig.Enabled {
-			if proxyConfig.HTTP != "" {
-				buildxCmd.Args = append(buildxCmd.Args, "--build-arg", fmt.Sprintf("HTTP_PROXY=%s", proxyConfig.HTTP))
-				buildxCmd.Args = append(buildxCmd.Args, "--build-arg", fmt.Sprintf("http_proxy=%s", proxyConfig.HTTP))
-			}
-			if proxyConfig.HTTPS != "" {
-				buildxCmd.Args = append(buildxCmd.Args, "--build-arg", fmt.Sprintf("HTTPS_PROXY=%s", proxyConfig.HTTPS))
-				buildxCmd.Args = append(buildxCmd.Args, "--build-arg", fmt.Sprintf("https_proxy=%s", proxyConfig.HTTPS))
-			}
-			if proxyConfig.NoProxy != "" {
-				buildxCmd.Args = append(buildxCmd.Args, "--build-arg", fmt.Sprintf("NO_PROXY=%s", proxyConfig.NoProxy))
-				buildxCmd.Args = append(buildxCmd.Args, "--build-arg", fmt.Sprintf("no_proxy=%s", proxyConfig.NoProxy))
-			}
-		}
-
-		tarStdout, err := tarCmd.StdoutPipe()
-		if err != nil {
-			return fmt.Errorf("failed to create tar pipe: %v", err)
-		}
-		buildxCmd.Stdin = tarStdout
-
-		buildxCmd.Stdout = os.Stdout
-		buildxCmd.Stderr = os.Stderr
-
-		if err := tarCmd.Start(); err != nil {
-			return fmt.Errorf("failed to start tar: %v", err)
-		}
-
-		if err := buildxCmd.Start(); err != nil {
-			tarCmd.Wait()
-			return fmt.Errorf("failed to start buildx: %v", err)
-		}
-
-		tarCmd.Wait()
-		return buildxCmd.Wait()
-	} else {
-		args := []string{"build", "-t", imageName, contextDir}
-
-		for k, v := range buildArgs {
-			args = append(args, "--build-arg", fmt.Sprintf("%s=%s", k, v))
-		}
-
-		if dockerfilePath != "Dockerfile" {
-			args = append(args, "-f", dockerfilePath)
-		}
-
-		if proxyConfig != nil && proxyConfig.Enabled {
-			if proxyConfig.HTTP != "" {
-				args = append(args, "--build-arg", fmt.Sprintf("HTTP_PROXY=%s", proxyConfig.HTTP))
-				args = append(args, "--build-arg", fmt.Sprintf("http_proxy=%s", proxyConfig.HTTP))
-			}
-			if proxyConfig.HTTPS != "" {
-				args = append(args, "--build-arg", fmt.Sprintf("HTTPS_PROXY=%s", proxyConfig.HTTPS))
-				args = append(args, "--build-arg", fmt.Sprintf("https_proxy=%s", proxyConfig.HTTPS))
-			}
-			if proxyConfig.NoProxy != "" {
-				args = append(args, "--build-arg", fmt.Sprintf("NO_PROXY=%s", proxyConfig.NoProxy))
-				args = append(args, "--build-arg", fmt.Sprintf("no_proxy=%s", proxyConfig.NoProxy))
-			}
-		}
-
-		buildCmd := exec.CommandContext(ctx, "docker", args...)
-		buildCmd.Stdout = os.Stdout
-		buildCmd.Stderr = os.Stderr
-
-		return buildCmd.Run()
-	}
 }
 
 func (c *Client) EnsureBuildxBuilder(ctx context.Context) error {

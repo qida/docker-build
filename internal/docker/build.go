@@ -14,9 +14,7 @@ import (
 // 无git，本地构建镜像
 func (c *Client) BuildImage(ctx context.Context, contextDir, dockerfilePath, imageName string, platforms []string, buildArgs map[string]string, proxyConfig *config.ProxyConfig) error {
 	log.Printf("[DOCKER] Building image from contextDir %s with Dockerfile %s. imageName:%s..\n", contextDir, dockerfilePath, imageName)
-	if dockerfilePath == "" {
-		dockerfilePath = "Dockerfile"
-	}
+
 	platformsStr := "linux/amd64"
 	if len(platforms) > 1 {
 		platformsStr = strings.Join(platforms, ",")

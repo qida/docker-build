@@ -31,6 +31,11 @@ func BuildRepository(ctx context.Context, cfg *config.Config, githubClient *gith
 		log.Printf("[ERROR] Failed to clone %s (branch %s): %v\n", repo.URL, repo.Branch, err)
 		return err
 	}
+	//查看文件列表执行ls
+	if err = exec.CommandContext(ctx, "ls", "-al", contextDir).Run(); err != nil {
+		log.Printf("[ERROR] Failed to list files in context dir: %v\n", err)
+		return err
+	}
 	//准备Dockerfile,如果用户自定义了Dockerfile,则复制到上下文目录
 	var dockerfilePath string
 	dockerfilePath, err = copyDockerfile(repo, contextDir)
@@ -57,7 +62,7 @@ func CloneRepository(ctx context.Context, contextDir string, repo *config.Reposi
 		return nil
 	}
 	//判断branch是否为空
-	branch, exist := isBranchExist(ctx, *repo, githubClient)
+	branch, exist := isBranchExist(*repo, githubClient)
 	if !exist {
 		return fmt.Errorf("branch %s does not exist", repo.Branch)
 	}
@@ -70,7 +75,7 @@ func CloneRepository(ctx context.Context, contextDir string, repo *config.Reposi
 	return nil
 }
 
-func isBranchExist(ctx context.Context, repo config.RepositoryConfig, githubClient *github.Client) (string, bool) {
+func isBranchExist(repo config.RepositoryConfig, githubClient *github.Client) (string, bool) {
 	if repo.Branch == "" {
 		branch, err := githubClient.GetDefaultBranch(repo.URL)
 		if err != nil {
@@ -140,7 +145,8 @@ func getImageName(branch, username, repoName, tag string) string {
 
 func copyDockerfile(repo config.RepositoryConfig, contextDir string) (string, error) {
 	if repo.DockerfileUser == "" {
-		return repo.DockerfileProject, nil
+		//返回绝对路径
+		return filepath.Join(contextDir, repo.DockerfileProject), nil
 	}
 	//将本地用户自定义Dockerfile文件路径复制到构建上下文目录
 	userDockerfileContent, err := os.ReadFile(repo.DockerfileUser)
