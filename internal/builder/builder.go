@@ -16,8 +16,7 @@ import (
 
 func BuildRepository(ctx context.Context, cfg *config.Config, githubClient *github.Client, dockerClient *docker.Client, repo config.RepositoryConfig) error {
 	var err error
-
-	//判断任务类型：1 本地上下文构建 2 远程仓库构建
+	// 判断任务类型：1 本地上下文构建 2 远程仓库构建
 	// 创建构建上下文目录
 	var contextDir string
 	contextDir, err = os.MkdirTemp("", "build-")
@@ -31,10 +30,13 @@ func BuildRepository(ctx context.Context, cfg *config.Config, githubClient *gith
 		log.Printf("[ERROR] Failed to clone %s (branch %s): %v\n", repo.URL, repo.Branch, err)
 		return err
 	}
-	//查看文件列表执行ls
-	if err = exec.CommandContext(ctx, "ls", "-al", contextDir).Run(); err != nil {
-		log.Printf("[ERROR] Failed to list files in context dir: %v\n", err)
-		return err
+	//在终端查看文件列表执行ls
+	log.Printf("[DEBUG] Cloned files:\n")
+	cmd := exec.CommandContext(ctx, "ls", "-la", contextDir)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	if err := cmd.Run(); err != nil {
+		log.Printf("[DEBUG] Failed to list files: %v\n", err)
 	}
 	//准备Dockerfile,如果用户自定义了Dockerfile,则复制到上下文目录
 	var dockerfilePath string
