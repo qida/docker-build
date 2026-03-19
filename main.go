@@ -30,7 +30,6 @@ func main() {
 		os.Exit(1)
 	}
 
-	githubClient := git.NewClient(cfg.GitHub.Token)
 	dockerClient, err := docker.NewClient()
 	if err != nil {
 		log.Printf("Error creating Docker client: %v\n", err)
@@ -46,9 +45,12 @@ func main() {
 		log.Println("[INFO] Proceeding without multi-platform support")
 	}
 
+	giteaClient := git.NewGiteaClient(cfg.Gitea.Token, cfg.Gitea.Url)
+	githubClient := git.NewGitHubClient(cfg.GitHub.Token)
+
 	sched := scheduler.NewScheduler()
 	sched.SetConfig(cfg)
-	sched.SetClients(githubClient, dockerClient)
+	sched.SetClients(map[string]git.GitClient{"gitea": giteaClient, "github": githubClient}, dockerClient)
 	sched.Start()
 
 	configWatcher, err := config.NewConfigWatcher(*configPath, func() {

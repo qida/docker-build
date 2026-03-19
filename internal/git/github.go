@@ -2,40 +2,30 @@ package git
 
 import (
 	"context"
-	"fmt"
-	"net/url"
-	"strings"
 
 	"github.com/google/go-github/v50/github"
 	"golang.org/x/oauth2"
 )
 
-type Client struct {
+type GitHubClient struct {
 	client *github.Client
 	ctx    context.Context
 }
 
-func NewClient(token string) *Client {
-	ctx := context.Background()
-	if token != "" {
-		ts := oauth2.StaticTokenSource(&oauth2.Token{AccessToken: token})
-		tc := oauth2.NewClient(ctx, ts)
-		return &Client{
-			client: github.NewClient(tc),
-			ctx:    ctx,
-		}
+func NewGitHubClient(token string) *GitHubClient {
+	if token == "" {
+		return nil
 	}
-	return &Client{
-		client: github.NewClient(nil),
+	ctx := context.Background()
+	ts := oauth2.StaticTokenSource(&oauth2.Token{AccessToken: token})
+	tc := oauth2.NewClient(ctx, ts)
+	return &GitHubClient{
+		client: github.NewClient(tc),
 		ctx:    ctx,
 	}
 }
 
-func (c *Client) HasDockerfile(repoURL, branch string) (bool, error) {
-	return c.HasDockerfileAtPath(repoURL, "Dockerfile", branch)
-}
-
-func (c *Client) HasDockerfileAtPath(repoURL, dockerfilePath, branch string) (bool, error) {
+func (c *GitHubClient) HasDockerfileAtPath(repoURL, branch, dockerfilePath string) (bool, error) {
 	owner, repo, err := parseRepoURL(repoURL)
 	if err != nil {
 		return false, err
@@ -58,7 +48,7 @@ func (c *Client) HasDockerfileAtPath(repoURL, dockerfilePath, branch string) (bo
 	return true, nil
 }
 
-func (c *Client) GetDefaultBranch(repoURL string) (string, error) {
+func (c *GitHubClient) GetDefaultBranch(repoURL string) (string, error) {
 	owner, repo, err := parseRepoURL(repoURL)
 	if err != nil {
 		return "", err
@@ -71,7 +61,7 @@ func (c *Client) GetDefaultBranch(repoURL string) (string, error) {
 	return repoInfo.GetDefaultBranch(), nil
 }
 
-func (c *Client) ValidateBranch(repoURL, branch string) (bool, error) {
+func (c *GitHubClient) ValidateBranch(repoURL, branch string) (bool, error) {
 	owner, repo, err := parseRepoURL(repoURL)
 	if err != nil {
 		return false, err
@@ -87,7 +77,7 @@ func (c *Client) ValidateBranch(repoURL, branch string) (bool, error) {
 	return true, nil
 }
 
-func (c *Client) ListBranches(repoURL string) ([]string, error) {
+func (c *GitHubClient) ListBranches(repoURL string) ([]string, error) {
 	owner, repo, err := parseRepoURL(repoURL)
 	if err != nil {
 		return nil, err
@@ -117,19 +107,4 @@ func (c *Client) ListBranches(repoURL string) ([]string, error) {
 	}
 
 	return allBranches, nil
-}
-
-func parseRepoURL(repoURL string) (string, string, error) {
-	parsed, err := url.Parse(repoURL)
-	if err != nil {
-		return "", "", err
-	}
-
-	path := strings.TrimPrefix(parsed.Path, "/")
-	parts := strings.Split(path, "/")
-	if len(parts) != 2 {
-		return "", "", fmt.Errorf("invalid repository URL: %s", repoURL)
-	}
-
-	return parts[0], parts[1], nil
 }

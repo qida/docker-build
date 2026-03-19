@@ -11,7 +11,7 @@ import (
 	"docker-build/internal/git"
 )
 
-func buildRepositoryTask(cfg *config.Config, githubClient *git.Client, dockerClient *docker.Client, repo config.RepositoryConfig) {
+func buildRepositoryTask(cfg *config.Config, gitClient *git.GitClient, dockerClient *docker.Client, repo config.RepositoryConfig) {
 	timeout := 30 * time.Minute
 	if repo.Timeout != "" {
 		if t, err := time.ParseDuration(repo.Timeout); err == nil {
@@ -24,7 +24,7 @@ func buildRepositoryTask(cfg *config.Config, githubClient *git.Client, dockerCli
 	taskCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
-	if err := builder.BuildRepository(taskCtx, cfg, githubClient, dockerClient, repo); err != nil {
+	if err := builder.BuildRepository(taskCtx, cfg, *gitClient, dockerClient, repo); err != nil {
 		if taskCtx.Err() == context.DeadlineExceeded {
 			log.Printf("[ERROR] Build timed out for %s after %v\n", repo.URL, timeout)
 		} else {

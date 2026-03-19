@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -14,7 +15,7 @@ import (
 	"docker-build/internal/git"
 )
 
-func BuildRepository(ctx context.Context, cfg *config.Config, github_client *git.Client, dockerClient *docker.Client, repo config.RepositoryConfig) error {
+func BuildRepository(ctx context.Context, cfg *config.Config, gitClient git.GitClient, dockerClient *docker.Client, repo config.RepositoryConfig) error {
 	var err error
 	// 判断任务类型：1 本地上下文构建 2 远程仓库构建
 	// 创建构建上下文目录
@@ -26,7 +27,7 @@ func BuildRepository(ctx context.Context, cfg *config.Config, github_client *git
 	}
 	defer os.RemoveAll(contextDir)
 	//远程仓库就先克隆到上下文目录
-	if err = CloneRepository(ctx, contextDir, &repo, github_client); err != nil {
+	if err = CloneRepository(ctx, contextDir, &repo, gitClient, cfg); err != nil {
 		log.Printf("[ERROR] Failed to clone %s (branch %s): %v\n", repo.URL, repo.TagBranch, err)
 		return err
 	}
@@ -58,18 +59,18 @@ func BuildRepository(ctx context.Context, cfg *config.Config, github_client *git
 
 	return nil
 }
-func CloneRepository(ctx context.Context, context_dir string, repo *config.RepositoryConfig, github_client *git.Client) error {
-	//判断是否是远程仓库
+func CloneRepository(ctx context.Context, context_dir string, repo *config.RepositoryConfig, gitClient git.GitClient, cfg *config.Config) error {
 	if repo.URL == "" {
+		//本地仓库
 		return nil
 	}
 	//判断branch是否为空
-	branch, exist := isBranchExist(*repo, github_client)
+	branch, exist := isBranchExist(*repo, gitClient)
 	if !exist {
 		return fmt.Errorf("branch %s does not exist", repo.TagBranch)
 	}
 	//clone repository
-	if err := cloneRepository(ctx, repo.URL, branch, context_dir); err != nil {
+	if err := cloneRepository(ctx, repo.URL, branch, context_dir, repo.Auth, cfg); err != nil {
 		log.Printf("[ERROR] Failed to clone %s (branch %s): %v\n", repo.URL, branch, err)
 		return err
 	}
@@ -77,8 +78,12 @@ func CloneRepository(ctx context.Context, context_dir string, repo *config.Repos
 	return nil
 }
 
-func isBranchExist(repo config.RepositoryConfig, github_client *git.Client) (string, bool) {
-	valid, err := github_client.ValidateBranch(repo.URL, repo.TagBranch)
+func isBranchExist(repo config.RepositoryConfig, gitClient git.GitClient) (string, bool) {
+	if gitClient == nil {
+		log.Printf("[ERROR] Git client is nil for repository: %s\n", repo.URL)
+		return "", false
+	}
+	valid, err := gitClient.ValidateBranch(repo.URL, repo.TagBranch)
 	if err != nil {
 		log.Printf("[ERROR] Failed to validate branch %s for %s: %v\n", repo.TagBranch, repo.URL, err)
 		return "", false
@@ -87,7 +92,7 @@ func isBranchExist(repo config.RepositoryConfig, github_client *git.Client) (str
 		return repo.TagBranch, true
 	}
 	//如果用户没有指定branch,则默认使用默认分支
-	branch, err := github_client.GetDefaultBranch(repo.URL)
+	branch, err := gitClient.GetDefaultBranch(repo.URL)
 	if err != nil {
 		log.Printf("[ERROR] Failed to get default branch for %s: %v\n", repo.URL, err)
 		return "", false
@@ -95,15 +100,33 @@ func isBranchExist(repo config.RepositoryConfig, github_client *git.Client) (str
 	log.Printf("[INFO] No branch specified, using default: %s\n", branch)
 	return branch, true
 }
-func cloneRepository(ctx context.Context, repoURL, branch, contextDir string) error {
+func cloneRepository(ctx context.Context, repoURL, branch, contextDir, auth string, cfg *config.Config) error {
 	var cmd *exec.Cmd
 	log.Printf("[INFO] Cloning repository (branch: %s) to %s...\n", branch, contextDir)
-	cmd = exec.CommandContext(ctx, "git", "clone",
-		"--branch", branch,
-		"--depth", "1",
-		"--single-branch",
-		"--no-tags",
-		repoURL, contextDir)
+	switch auth {
+	case "gitea":
+		giteaUser := cfg.Gitea.Username
+		giteaToken := cfg.Gitea.Token
+		parsedURL, err := url.Parse(repoURL)
+		if err != nil {
+			return err
+		}
+		authURL := fmt.Sprintf("%s://%s:%s@%s%s", parsedURL.Scheme, giteaUser, giteaToken, parsedURL.Host, parsedURL.Path)
+		cmd = exec.CommandContext(ctx, "git", "clone",
+			"--branch", branch,
+			"--depth", "1",
+			"--single-branch",
+			"--no-tags",
+			authURL, contextDir)
+	default:
+		cmd = exec.CommandContext(ctx, "git", "clone",
+			"--branch", branch,
+			"--depth", "1",
+			"--single-branch",
+			"--no-tags",
+			repoURL, contextDir)
+	}
+
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	return cmd.Run()
@@ -127,9 +150,9 @@ func getImageName(tag_branch, username, repo_name, tag_name string) string {
 		tag_name = "latest"
 	}
 	if tag_branch == "main" || tag_branch == "master" {
-		return fmt.Sprintf("%s/%s:%s", username, repo_name, tag_name)
+		return strings.ToLower(fmt.Sprintf("%s/%s:%s", username, repo_name, tag_name))
 	} else {
-		return fmt.Sprintf("%s/%s-%s:%s", username, repo_name, tag_branch, tag_name)
+		return strings.ToLower(fmt.Sprintf("%s/%s-%s:%s", username, repo_name, tag_branch, tag_name))
 	}
 }
 

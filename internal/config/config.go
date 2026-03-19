@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 	"os"
+	"strings"
 
 	"gopkg.in/yaml.v3"
 )
@@ -18,6 +19,7 @@ type GitHubConfig struct {
 }
 
 type GiteaConfig struct {
+	Url      string `yaml:"url"`
 	Username string `yaml:"username"`
 	Token    string `yaml:"token"`
 }
@@ -47,6 +49,7 @@ type RepositoryConfig struct {
 type Config struct {
 	DockerHub    DockerHubConfig    `yaml:"docker_hub"`
 	GitHub       GitHubConfig       `yaml:"github"`
+	Gitea        *GiteaConfig       `yaml:"gitea"`
 	Proxy        *ProxyConfig       `yaml:"proxy,omitempty"`
 	Repositories []RepositoryConfig `yaml:"repositories"`
 }
@@ -61,6 +64,11 @@ func LoadConfig(filePath string) (*Config, error) {
 	err = yaml.Unmarshal(data, &config)
 	if err != nil {
 		return nil, err
+	}
+	if config.Gitea != nil {
+		if config.Gitea.Url == "" {
+			return nil, errMissingField("gitea.url")
+		}
 	}
 
 	if config.DockerHub.Username == "" {
@@ -85,7 +93,11 @@ func LoadConfig(filePath string) (*Config, error) {
 		// 	config.Repositories[i].TagDocker = "latest"
 		// }
 		if repo.Auth == "" {
-			config.Repositories[i].Auth = "github"
+			if strings.Contains(repo.URL, "gitea") {
+				config.Repositories[i].Auth = "gitea"
+			} else {
+				config.Repositories[i].Auth = "github"
+			}
 		}
 		if repo.TagBranch == "" {
 			config.Repositories[i].TagBranch = "main"
@@ -96,9 +108,13 @@ func LoadConfig(filePath string) (*Config, error) {
 		if repo.DockerfileProject == "" {
 			config.Repositories[i].DockerfileProject = "Dockerfile"
 		}
+
+		config.Repositories[i].URL = strings.TrimRight(repo.URL, ".git")
+
 		if repo.URL == "" && repo.DockerfileUser == "" {
 			return nil, errMissingFieldAt("repositories", i, "url or dockerfile_user")
 		}
+
 	}
 	return &config, nil
 }
