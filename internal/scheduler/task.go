@@ -8,10 +8,10 @@ import (
 	"docker-build/internal/builder"
 	"docker-build/internal/config"
 	"docker-build/internal/docker"
-	"docker-build/internal/github"
+	"docker-build/internal/git"
 )
 
-func buildRepositoryTask(cfg *config.Config, githubClient *github.Client, dockerClient *docker.Client, repo config.RepositoryConfig) {
+func buildRepositoryTask(cfg *config.Config, githubClient *git.Client, dockerClient *docker.Client, repo config.RepositoryConfig) {
 	timeout := 30 * time.Minute
 	if repo.Timeout != "" {
 		if t, err := time.ParseDuration(repo.Timeout); err == nil {

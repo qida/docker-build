@@ -17,6 +17,11 @@ type GitHubConfig struct {
 	Token    string `yaml:"token"`
 }
 
+type GiteaConfig struct {
+	Username string `yaml:"username"`
+	Token    string `yaml:"token"`
+}
+
 type ProxyConfig struct {
 	Enabled bool   `yaml:"enabled"`
 	HTTP    string `yaml:"http,omitempty"`
@@ -25,11 +30,11 @@ type ProxyConfig struct {
 }
 
 type RepositoryConfig struct {
-	Enabled *bool  `yaml:"enabled,omitempty"`
-	URL     string `yaml:"url,omitempty"`
-
-	Branch            string            `yaml:"branch,omitempty"`     // 用于clone repository的branch
-	DockerTag         string            `yaml:"docker_tag,omitempty"` // 仅用于镜像名称的tag
+	Enabled           *bool             `yaml:"enabled,omitempty"`
+	URL               string            `yaml:"url,omitempty"`
+	Auth              string            `yaml:"auth,omitempty"`
+	TagBranch         string            `yaml:"tag_branch,omitempty"` // 用于clone repository的branch
+	TagDocker         string            `yaml:"tag_docker,omitempty"` // 仅用于镜像名称的tag
 	Platforms         []string          `yaml:"platforms,omitempty"`
 	BuildArgs         map[string]string `yaml:"build_args,omitempty"`
 	DockerfileProject string            `yaml:"dockerfile_project,omitempty"`
@@ -76,12 +81,14 @@ func LoadConfig(filePath string) (*Config, error) {
 
 	for i, repo := range config.Repositories {
 
-		// if repo.Tag == "" {
-		// 	config.Repositories[i].Tag = "latest"
+		// if repo.TagDocker == "" {
+		// 	config.Repositories[i].TagDocker = "latest"
 		// }
-
-		if repo.Branch == "" {
-			config.Repositories[i].Branch = "main"
+		if repo.Auth == "" {
+			config.Repositories[i].Auth = "github"
+		}
+		if repo.TagBranch == "" {
+			config.Repositories[i].TagBranch = "main"
 		}
 		if repo.Platforms == nil {
 			config.Repositories[i].Platforms = []string{"linux/amd64"}

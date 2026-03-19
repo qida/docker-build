@@ -11,10 +11,10 @@ import (
 
 	"docker-build/internal/config"
 	"docker-build/internal/docker"
-	"docker-build/internal/github"
+	"docker-build/internal/git"
 )
 
-func BuildRepository(ctx context.Context, cfg *config.Config, githubClient *github.Client, dockerClient *docker.Client, repo config.RepositoryConfig) error {
+func BuildRepository(ctx context.Context, cfg *config.Config, github_client *git.Client, dockerClient *docker.Client, repo config.RepositoryConfig) error {
 	var err error
 	// 判断任务类型：1 本地上下文构建 2 远程仓库构建
 	// 创建构建上下文目录
@@ -26,8 +26,8 @@ func BuildRepository(ctx context.Context, cfg *config.Config, githubClient *gith
 	}
 	defer os.RemoveAll(contextDir)
 	//远程仓库就先克隆到上下文目录
-	if err = CloneRepository(ctx, contextDir, &repo, githubClient); err != nil {
-		log.Printf("[ERROR] Failed to clone %s (branch %s): %v\n", repo.URL, repo.Branch, err)
+	if err = CloneRepository(ctx, contextDir, &repo, github_client); err != nil {
+		log.Printf("[ERROR] Failed to clone %s (branch %s): %v\n", repo.URL, repo.TagBranch, err)
 		return err
 	}
 	//在终端查看文件列表执行ls
@@ -46,48 +46,48 @@ func BuildRepository(ctx context.Context, cfg *config.Config, githubClient *gith
 		return err
 	}
 	//执行构建
-	imageName := getImageName(repo.Branch, cfg.DockerHub.Username, getRepoName(&repo), repo.DockerTag)
+	imageName := getImageName(repo.TagBranch, cfg.DockerHub.Username, getRepoName(&repo), repo.TagDocker)
 	log.Printf("[INFO] Building and pushing Docker image: %s...\n", imageName)
 	var buildErr error
 	buildErr = dockerClient.BuildImage(ctx, contextDir, dockerfilePath, imageName, repo.Platforms, repo.BuildArgs, cfg.Proxy)
 	if buildErr != nil {
-		log.Printf("[ERROR] Failed to build image for %s (branch %s): %v\n", repo.URL, repo.Branch, buildErr)
+		log.Printf("[ERROR] Failed to build image for %s (branch %s): %v\n", repo.URL, repo.TagBranch, buildErr)
 		return buildErr
 	}
 	log.Printf("[SUCCESS] Successfully built and pushed %s\n", imageName)
 
 	return nil
 }
-func CloneRepository(ctx context.Context, contextDir string, repo *config.RepositoryConfig, githubClient *github.Client) error {
+func CloneRepository(ctx context.Context, context_dir string, repo *config.RepositoryConfig, github_client *git.Client) error {
 	//判断是否是远程仓库
 	if repo.URL == "" {
 		return nil
 	}
 	//判断branch是否为空
-	branch, exist := isBranchExist(*repo, githubClient)
+	branch, exist := isBranchExist(*repo, github_client)
 	if !exist {
-		return fmt.Errorf("branch %s does not exist", repo.Branch)
+		return fmt.Errorf("branch %s does not exist", repo.TagBranch)
 	}
 	//clone repository
-	if err := cloneRepository(ctx, repo.URL, branch, contextDir); err != nil {
+	if err := cloneRepository(ctx, repo.URL, branch, context_dir); err != nil {
 		log.Printf("[ERROR] Failed to clone %s (branch %s): %v\n", repo.URL, branch, err)
 		return err
 	}
-	repo.Branch = branch
+	repo.TagBranch = branch
 	return nil
 }
 
-func isBranchExist(repo config.RepositoryConfig, githubClient *github.Client) (string, bool) {
-	valid, err := githubClient.ValidateBranch(repo.URL, repo.Branch)
+func isBranchExist(repo config.RepositoryConfig, github_client *git.Client) (string, bool) {
+	valid, err := github_client.ValidateBranch(repo.URL, repo.TagBranch)
 	if err != nil {
-		log.Printf("[ERROR] Failed to validate branch %s for %s: %v\n", repo.Branch, repo.URL, err)
+		log.Printf("[ERROR] Failed to validate branch %s for %s: %v\n", repo.TagBranch, repo.URL, err)
 		return "", false
 	}
 	if valid {
-		return repo.Branch, true
+		return repo.TagBranch, true
 	}
 	//如果用户没有指定branch,则默认使用默认分支
-	branch, err := githubClient.GetDefaultBranch(repo.URL)
+	branch, err := github_client.GetDefaultBranch(repo.URL)
 	if err != nil {
 		log.Printf("[ERROR] Failed to get default branch for %s: %v\n", repo.URL, err)
 		return "", false
@@ -122,26 +122,28 @@ func getRepoName(repo *config.RepositoryConfig) string {
 	return ""
 }
 
-func getImageName(branch, username, repoName, tag string) string {
-
-	if branch == "main" || branch == "master" {
-		return fmt.Sprintf("%s/%s:%s", username, repoName, tag)
+func getImageName(tag_branch, username, repo_name, tag_name string) string {
+	if tag_name == "" {
+		tag_name = "latest"
+	}
+	if tag_branch == "main" || tag_branch == "master" {
+		return fmt.Sprintf("%s/%s:%s", username, repo_name, tag_name)
 	} else {
-		return fmt.Sprintf("%s/%s-%s:%s", username, repoName, branch, tag)
+		return fmt.Sprintf("%s/%s-%s:%s", username, repo_name, tag_branch, tag_name)
 	}
 }
 
-func copyDockerfile(repo config.RepositoryConfig, contextDir string) (string, error) {
+func copyDockerfile(repo config.RepositoryConfig, context_dir string) (string, error) {
 	if repo.DockerfileUser == "" {
 		//返回绝对路径
-		return filepath.Join(contextDir, repo.DockerfileProject), nil
+		return filepath.Join(context_dir, repo.DockerfileProject), nil
 	}
 	//将本地用户自定义Dockerfile文件路径复制到构建上下文目录
 	userDockerfileContent, err := os.ReadFile(repo.DockerfileUser)
 	if err != nil {
 		return "", fmt.Errorf("failed to read user-provided Dockerfile: %w", err)
 	}
-	userDockerfilePath := filepath.Join(contextDir, "Dockerfile")
+	userDockerfilePath := filepath.Join(context_dir, "Dockerfile")
 	if err := os.WriteFile(userDockerfilePath, userDockerfileContent, 0644); err != nil {
 		return "", fmt.Errorf("failed to write user-provided Dockerfile: %w", err)
 	}

@@ -7,7 +7,7 @@ import (
 
 	"docker-build/internal/config"
 	"docker-build/internal/docker"
-	"docker-build/internal/github"
+	"docker-build/internal/git"
 
 	"github.com/robfig/cron/v3"
 )
@@ -16,7 +16,7 @@ type Scheduler struct {
 	mu            sync.RWMutex
 	cronScheduler *cron.Cron
 	cfg           *config.Config
-	githubClient  *github.Client
+	githubClient  *git.Client
 	dockerClient  *docker.Client
 }
 
@@ -32,7 +32,7 @@ func (s *Scheduler) SetConfig(cfg *config.Config) {
 	s.cfg = cfg
 }
 
-func (s *Scheduler) SetClients(githubClient *github.Client, dockerClient *docker.Client) {
+func (s *Scheduler) SetClients(githubClient *git.Client, dockerClient *docker.Client) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.githubClient = githubClient

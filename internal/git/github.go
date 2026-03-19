@@ -1,4 +1,4 @@
-package github
+package git
 
 import (
 	"context"
@@ -31,11 +31,7 @@ func NewClient(token string) *Client {
 	}
 }
 
-func (c *Client) HasDockerfile(repoURL string) (bool, error) {
-	return c.HasDockerfileAtPath(repoURL, "Dockerfile", "")
-}
-
-func (c *Client) HasDockerfileOnBranch(repoURL, branch string) (bool, error) {
+func (c *Client) HasDockerfile(repoURL, branch string) (bool, error) {
 	return c.HasDockerfileAtPath(repoURL, "Dockerfile", branch)
 }
 

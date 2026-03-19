@@ -6,6 +6,10 @@ github:
   username: "name"
   token: "ghp_vcmnfoS75jweJxxxxxx"
 
+gitea:
+  username: "name"  
+  token: ""
+
 proxy:
   enabled: false
   http: "http://192.168.100.3:2080"
@@ -13,40 +17,23 @@ proxy:
   no_proxy: "localhost,127.0.0.1"
 
 repositories:
-  - url: "https://github.com/sipeed/picoclaw"
-    enabled: false
-    branch: "main"
-    tag: "latest"
-    dockerfile_project: "docker/Dockerfile"
-    platforms:
+  - url: "https://github.com/sipeed/picoclaw" #仓库地址，目前只支持Github仓库
+    enabled: false #是否启用构建，默认false
+    auth: "github" #认证方式，默认github
+    tag_branch: "main" #指定tag或branch
+    tag_docker: "latest" #镜像版本
+    dockerfile_project: "docker/Dockerfile" #git clone 项目中Dockerfile相对路径，默认为根目录下Dockerfile
+    dockerfile_user: "" #构建镜像时会从指定位置复制Dockerfile文件到目标项目根目录。dockerfile_user优先级高dockerfile_project 如:dockerfile/hello/Dockerfile，会将hello识别为镜像主名称
+    platforms: #默认：linux/amd64
       - "linux/amd64"
       - "linux/arm64"
-    build_args:
+    build_args: #从Dockerfile中传弟参数
       VERSION: "1.0.0"
       BUILD_DATE: "2026-03-12"
-  - url: "https://github.com/YspCoder/clawgo"
-    enabled: false
-    branch: "main"
-    tag: "latest"
-    dockerfile_project: "Dockerfile"
-    platforms:
-      - "linux/amd64"
-    build_args:
-      GO_VERSION: "1.21"
-  - url: "https://github.com/ntop/n2n"
-    enabled: false
-    branch: "master"
-    tag: "latest"
-    dockerfile_user: "dockerfile/n2n/Dockerfile"
-    platforms:
-      - "linux/amd64"
-      - "linux/arm64"
-    build_args:
-      GO_VERSION: "1.21"      
   - url: ""
     enabled: true
-    branch: "master"
-    tag: "latest"
+    tag_branch: "master"
+    tag_docker: "latest"
     dockerfile_user: "dockerfile/go-thrift/Dockerfile"
     platforms:
       - "linux/amd64"

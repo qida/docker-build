@@ -9,7 +9,7 @@ import (
 
 	"docker-build/internal/config"
 	"docker-build/internal/docker"
-	"docker-build/internal/github"
+	"docker-build/internal/git"
 	"docker-build/internal/logx"
 	"docker-build/internal/scheduler"
 )
@@ -30,7 +30,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	githubClient := github.NewClient(cfg.GitHub.Token)
+	githubClient := git.NewClient(cfg.GitHub.Token)
 	dockerClient, err := docker.NewClient()
 	if err != nil {
 		log.Printf("Error creating Docker client: %v\n", err)
