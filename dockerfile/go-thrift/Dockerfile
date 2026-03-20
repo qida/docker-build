@@ -5,13 +5,19 @@ ARG THRIFT_VERSION
 ENV _THRIFT_VERSION=${THRIFT_VERSION}
 
 # RUN sed -i s/deb.debian.org/mirrors.aliyun.com/g /etc/apt/sources.list 
-RUN apt-get update
-RUN apt-get install libboost-dev libboost-test-dev \
-    libboost-program-options-dev libboost-system-dev \
-    libboost-filesystem-dev libevent-dev automake \
-    libtool flex bison pkg-config libssl-dev wget pip \
-    autoconf g++ libboost-all-dev python3-pip python3-setuptools \
-    -y
+
+# python3-setuptools libboost-all-dev
+
+RUN apt-get update && apt-get install -y \
+    automake autoconf libtool \
+    flex bison \
+    pkg-config \
+    libssl-dev \
+    g++ \
+    libboost-dev \
+    python3-pip python3-dev \
+    wget \
+    && rm -rf /var/lib/apt/lists/*
 RUN if [ -z "$_THRIFT_VERSION" ] || [ "$_THRIFT_VERSION" = "latest" ]; then \
     _THRIFT_VERSION=$(curl -s https://api.github.com/repos/apache/thrift/releases/latest | grep '"tag_name"' | sed -E 's/.*"tag_name": "v?([0-9.]+)".*/\1/');\
     echo "Using latest Thrift version: $_THRIFT_VERSION";\

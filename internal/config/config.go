@@ -1,6 +1,7 @@
 package config
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"strings"
@@ -8,50 +9,56 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+type WebHttp struct {
+	Ip   string `yaml:"ip" json:"ip"`
+	Port int    `yaml:"port" json:"port"`
+}
+
 type DockerHubConfig struct {
-	Username string `yaml:"username"`
-	Password string `yaml:"password"`
+	Username string `yaml:"username" json:"username"`
+	Password string `yaml:"password" json:"password"`
 }
 
 type GitHubConfig struct {
-	Username string `yaml:"username"`
-	Token    string `yaml:"token"`
+	Username string `yaml:"username" json:"username"`
+	Token    string `yaml:"token" json:"token"`
 }
 
 type GiteaConfig struct {
-	Url      string `yaml:"url"`
-	Username string `yaml:"username"`
-	Token    string `yaml:"token"`
+	Url      string `yaml:"url" json:"url"`
+	Username string `yaml:"username" json:"username"`
+	Token    string `yaml:"token" json:"token"`
 }
 
 type ProxyConfig struct {
-	Enabled bool   `yaml:"enabled"`
-	HTTP    string `yaml:"http,omitempty"`
-	HTTPS   string `yaml:"https,omitempty"`
-	NoProxy string `yaml:"no_proxy,omitempty"`
+	Enabled bool   `yaml:"enabled" json:"enabled"`
+	Http    string `yaml:"http,omitempty" json:"http"`
+	Https   string `yaml:"https,omitempty" json:"https"`
+	NoProxy string `yaml:"no_proxy,omitempty" json:"no_proxy"`
 }
 
 type RepositoryConfig struct {
-	Enabled           *bool             `yaml:"enabled,omitempty"`
-	URL               string            `yaml:"url,omitempty"`
-	Auth              string            `yaml:"auth,omitempty"`
-	TagBranch         string            `yaml:"tag_branch,omitempty"` // 用于clone repository的branch
-	TagDocker         string            `yaml:"tag_docker,omitempty"` // 仅用于镜像名称的tag
-	Platforms         []string          `yaml:"platforms,omitempty"`
-	BuildArgs         map[string]string `yaml:"build_args,omitempty"`
-	DockerfileProject string            `yaml:"dockerfile_project,omitempty"`
-	DockerfileUser    string            `yaml:"dockerfile_user,omitempty"`
-
-	Cron    string `yaml:"cron,omitempty"`
-	Timeout string `yaml:"timeout,omitempty"`
+	NameTask          string            `yaml:"name_task,omitempty" json:"name_task,omitempty"`
+	Enabled           *bool             `yaml:"enabled,omitempty" json:"enabled,omitempty"`
+	URL               string            `yaml:"url,omitempty" json:"url,omitempty"`
+	Auth              string            `yaml:"auth,omitempty" json:"auth,omitempty"`
+	TagBranch         string            `yaml:"tag_branch,omitempty" json:"tag_branch,omitempty"`
+	TagDocker         string            `yaml:"tag_docker,omitempty" json:"tag_docker,omitempty"`
+	Platforms         []string          `yaml:"platforms,omitempty" json:"platforms,omitempty"`
+	BuildArgs         map[string]string `yaml:"build_args,omitempty" json:"build_args,omitempty"`
+	DockerfileProject string            `yaml:"dockerfile_project,omitempty" json:"dockerfile_project,omitempty"`
+	DockerfileUser    string            `yaml:"dockerfile_user,omitempty" json:"dockerfile_user,omitempty"`
+	Cron              string            `yaml:"cron,omitempty" json:"cron,omitempty"`
+	Timeout           string            `yaml:"timeout,omitempty" json:"timeout,omitempty"`
 }
 
 type Config struct {
-	DockerHub    DockerHubConfig    `yaml:"docker_hub"`
-	GitHub       GitHubConfig       `yaml:"github"`
-	Gitea        *GiteaConfig       `yaml:"gitea"`
-	Proxy        *ProxyConfig       `yaml:"proxy,omitempty"`
-	Repositories []RepositoryConfig `yaml:"repositories"`
+	WebHttp      WebHttp            `yaml:"web_http" json:"web_http"`
+	DockerHub    DockerHubConfig    `yaml:"docker_hub" json:"docker_hub"`
+	GitHub       GitHubConfig       `yaml:"github" json:"github"`
+	Gitea        *GiteaConfig       `yaml:"gitea" json:"gitea,omitempty"`
+	Proxy        *ProxyConfig       `yaml:"proxy,omitempty" json:"proxy,omitempty"`
+	Repositories []RepositoryConfig `yaml:"repositories" json:"repositories"`
 }
 
 func LoadConfig(filePath string) (*Config, error) {
@@ -60,61 +67,112 @@ func LoadConfig(filePath string) (*Config, error) {
 		return nil, err
 	}
 
-	var config Config
-	err = yaml.Unmarshal(data, &config)
+	var cfg Config
+	err = yaml.Unmarshal(data, &cfg)
 	if err != nil {
 		return nil, err
 	}
-	if config.Gitea != nil {
-		if config.Gitea.Url == "" {
+
+	if cfg.WebHttp.Ip == "" {
+		cfg.WebHttp.Ip = "0.0.0.0"
+	}
+	
+	if cfg.WebHttp.Port == 0 {
+		cfg.WebHttp.Port = 8080
+	}
+
+	if cfg.Gitea != nil {
+		if cfg.Gitea.Url == "" {
 			return nil, errMissingField("gitea.url")
 		}
 	}
 
-	if config.DockerHub.Username == "" {
+	if cfg.DockerHub.Username == "" {
 		return nil, errMissingField("docker_hub.username")
 	}
-	if config.DockerHub.Password == "" {
+	if cfg.DockerHub.Password == "" {
 		return nil, errMissingField("docker_hub.password")
 	}
-	if config.GitHub.Token == "" {
+	if cfg.GitHub.Token == "" {
 		return nil, errMissingField("github.token")
 	}
-	if config.GitHub.Username == "" {
+	if cfg.GitHub.Username == "" {
 		return nil, errMissingField("github.username")
 	}
-	if len(config.Repositories) == 0 {
+	if len(cfg.Repositories) == 0 {
 		return nil, errMissingField("repositories")
 	}
 
-	for i, repo := range config.Repositories {
-
-		// if repo.TagDocker == "" {
-		// 	config.Repositories[i].TagDocker = "latest"
-		// }
+	for i, repo := range cfg.Repositories {
 		if repo.Auth == "" {
 			if strings.Contains(repo.URL, "gitea") {
-				config.Repositories[i].Auth = "gitea"
+				cfg.Repositories[i].Auth = "gitea"
 			} else {
-				config.Repositories[i].Auth = "github"
+				cfg.Repositories[i].Auth = "github"
 			}
 		}
 		if repo.TagBranch == "" {
-			config.Repositories[i].TagBranch = "main"
+			cfg.Repositories[i].TagBranch = "main"
 		}
 		if repo.Platforms == nil {
-			config.Repositories[i].Platforms = []string{"linux/amd64"}
+			cfg.Repositories[i].Platforms = []string{"linux/amd64"}
 		}
 		if repo.DockerfileProject == "" {
-			config.Repositories[i].DockerfileProject = "Dockerfile"
+			cfg.Repositories[i].DockerfileProject = "Dockerfile"
 		}
 
-		config.Repositories[i].URL = strings.TrimRight(repo.URL, ".git")
+		cfg.Repositories[i].URL = strings.TrimRight(repo.URL, ".git")
 
 		if repo.URL == "" && repo.DockerfileUser == "" {
 			return nil, errMissingFieldAt("repositories", i, "url or dockerfile_user")
 		}
+	}
 
+	return &cfg, nil
+}
+
+func (c *Config) Validate() error {
+	if c.DockerHub.Username == "" {
+		return errMissingField("docker_hub.username")
+	}
+	if c.DockerHub.Password == "" {
+		return errMissingField("docker_hub.password")
+	}
+	if c.GitHub.Token == "" {
+		return errMissingField("github.token")
+	}
+	if c.GitHub.Username == "" {
+		return errMissingField("github.username")
+	}
+	if len(c.Repositories) == 0 {
+		return errMissingField("repositories")
+	}
+
+	if c.Gitea != nil && c.Gitea.Url == "" {
+		return errMissingField("gitea.url")
+	}
+
+	for i, repo := range c.Repositories {
+		if repo.URL == "" && repo.DockerfileUser == "" {
+			return errMissingFieldAt("repositories", i, "url or dockerfile_user")
+		}
+	}
+
+	return nil
+}
+
+func (c *Config) ToJSON() ([]byte, error) {
+	return json.MarshalIndent(c, "", "  ")
+}
+
+func (c *Config) ToYAML() ([]byte, error) {
+	return yaml.Marshal(c)
+}
+
+func ConfigFromJSON(data []byte) (*Config, error) {
+	var config Config
+	if err := json.Unmarshal(data, &config); err != nil {
+		return nil, err
 	}
 	return &config, nil
 }

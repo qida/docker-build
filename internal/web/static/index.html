@@ -1,0 +1,609 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Docker Build Manager</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            background: #f5f5f5;
+            line-height: 1.6;
+        }
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        header {
+            background: #1a1a2e;
+            color: #fff;
+            padding: 20px;
+            margin-bottom: 20px;
+            border-radius: 8px;
+        }
+        header h1 {
+            font-size: 24px;
+            margin-bottom: 10px;
+        }
+        .status-bar {
+            display: flex;
+            gap: 20px;
+            align-items: center;
+        }
+        .status-item {
+            background: rgba(255,255,255,0.1);
+            padding: 8px 16px;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+        .tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        .tab {
+            padding: 12px 24px;
+            background: #e0e0e0;
+            border: none;
+            border-radius: 8px 8px 0 0;
+            cursor: pointer;
+            font-size: 16px;
+            transition: all 0.3s;
+        }
+        .tab:hover {
+            background: #d0d0d0;
+        }
+        .tab.active {
+            background: #1a1a2e;
+            color: #fff;
+        }
+        .tab-content {
+            display: none;
+            background: #fff;
+            padding: 20px;
+            border-radius: 0 8px 8px 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        .tab-content.active {
+            display: block;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 500;
+            color: #333;
+        }
+        .form-group textarea {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            font-family: 'Monaco', 'Menlo', monospace;
+            font-size: 14px;
+            resize: vertical;
+            min-height: 400px;
+        }
+        .form-group textarea:focus {
+            outline: none;
+            border-color: #1a1a2e;
+        }
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.3s;
+        }
+        .btn-primary {
+            background: #1a1a2e;
+            color: #fff;
+        }
+        .btn-primary:hover {
+            background: #16213e;
+        }
+        .btn-success {
+            background: #28a745;
+            color: #fff;
+        }
+        .btn-success:hover {
+            background: #218838;
+        }
+        .btn-danger {
+            background: #dc3545;
+            color: #fff;
+        }
+        .btn-danger:hover {
+            background: #c82333;
+        }
+        .btn-warning {
+            background: #ffc107;
+            color: #000;
+        }
+        .btn-warning:hover {
+            background: #e0a800;
+        }
+        .btn-group {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+        }
+        .repo-list {
+            display: grid;
+            gap: 15px;
+        }
+        .repo-card {
+            background: #fff;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        .repo-card h3 {
+            margin-bottom: 15px;
+            color: #1a1a2e;
+        }
+        .repo-info {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+        .repo-info-item {
+            background: #f8f9fa;
+            padding: 8px 12px;
+            border-radius: 4px;
+            font-size: 13px;
+        }
+        .repo-info-item strong {
+            color: #666;
+        }
+        .repo-actions {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+        .status-badge {
+            padding: 4px 12px;
+            border-radius: 5px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+        .status-active {
+            background: #d4edda;
+            color: #155724;
+        }
+        .status-inactive {
+            background: #f8d7da;
+            color: #721c24;
+        }
+        .status-building {
+            background: #cce5ff;
+            color: #004085;
+        }
+        .notification {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 15px 25px;
+            border-radius: 8px;
+            color: #fff;
+            font-size: 14px;
+            z-index: 1000;
+            animation: slideIn 0.3s ease;
+        }
+        .notification.success {
+            background: #28a745;
+        }
+        .notification.error {
+            background: #dc3545;
+        }
+        @keyframes slideIn {
+            from {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+        .notification-container {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 1000;
+        }
+        .loading {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border: 2px solid #fff;
+            border-top-color: transparent;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        .section-title {
+            font-size: 18px;
+            color: #1a1a2e;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #e0e0e0;
+        }
+        .scheduler-info {
+            display: flex;
+            gap: 30px;
+            margin-bottom: 20px;
+        }
+        .scheduler-item {
+            background: #f8f9fa;
+            padding: 15px 20px;
+            border-radius: 8px;
+        }
+        .scheduler-item strong {
+            color: #666;
+            margin-right: 8px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>📦 Docker Build Manager</h1>
+            <div class="status-bar">
+                <div class="status-item">
+                    <strong>状态:</strong>
+                    <span id="serverStatus" class="status-badge status-active">运行中</span>
+                </div>
+                <div class="status-item">
+                    <strong>任务数:</strong>
+                    <span id="taskCount">0</span>
+                </div>
+                <div class="status-item">
+                    <strong>构建中:</strong>
+                    <span id="buildingCount">0</span>
+                </div>
+                <button class="btn btn-primary" onclick="reloadConfig()">🔄 重新加载配置</button>
+            </div>
+        </header>
+
+        <div class="tabs">
+            <button class="tab active" onclick="switchTab('config')">📝 配置管理</button>
+            <button class="tab" onclick="switchTab('scheduler')">⚙️ 任务管理</button>
+            <button class="tab" onclick="switchTab('logs')">📋 日志查看</button>
+        </div>
+
+        <div id="configTab" class="tab-content active">
+            <div class="section-title">配置文件编辑</div>
+            <div class="form-group">
+                <label for="configEditor">config.yaml</label>
+                <textarea id="configEditor" spellcheck="false"></textarea>
+            </div>
+            <div class="btn-group">
+                <button class="btn btn-primary" onclick="saveConfig()">💾 保存配置</button>
+                <button class="btn btn-danger" onclick="resetConfig()">🔄 重置配置</button>
+            </div>
+        </div>
+
+        <div id="schedulerTab" class="tab-content">
+            <div class="section-title">任务调度信息</div>
+            <div class="scheduler-info">
+                <div class="scheduler-item">
+                    <strong>状态:</strong>
+                    <span id="schedulerStatus">运行中</span>
+                </div>
+                <div class="scheduler-item">
+                    <strong>定时任务数:</strong>
+                    <span id="cronCount">0</span>
+                </div>
+                <div class="scheduler-item">
+                    <strong>正在构建:</strong>
+                    <span id="buildingCount">0</span>
+                </div>
+            </div>
+            <div id="repoList" class="repo-list"></div>
+        </div>
+
+        <div id="logsTab" class="tab-content">
+            <div class="section-title">实时日志</div>
+            <div class="form-group">
+                <label for="logViewer">服务运行日志 (docker-build.log)</label>
+                <div style="position: relative;">
+                    <textarea id="logViewer" spellcheck="false" readonly 
+                              style="width: 100%; min-height: 600px; font-family: 'Monaco', 'Menlo', monospace; 
+                                     font-size: 13px; background: #1e1e1e; color: #d4d4d4; border: 1px solid #333; 
+                                     padding: 15px; resize: vertical; line-height: 1.5;"></textarea>
+                    <div style="position: absolute; top: 10px; right: 10px; display: flex; gap: 10px;">
+                        <button class="btn btn-primary" onclick="toggleAutoScroll()" id="autoScrollBtn" 
+                                style="padding: 5px 15px; font-size: 13px;">⏬ 自动滚动：开启</button>
+                        <button class="btn btn-primary" onclick="clearLogs()" 
+                                style="padding: 5px 15px; font-size: 13px;">🗑️ 清空</button>
+                    </div>
+                </div>
+                <div style="margin-top: 10px; color: #666; font-size: 13px;">
+                    <span id="logStatus">● 正在连接日志流...</span>
+                    <span id="logLines" style="margin-left: 15px;">行数：0</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="notificationContainer" class="notification-container"></div>
+
+    <script src="https://cdn.jsdelivr.net/npm/js-yaml@4/dist/js-yaml.min.js"></script>
+    <script>
+        let configContent = '';
+        let repos = [];
+
+        async function fetchJSON(path) {
+            const res = await fetch('/api' + path);
+            if (!res.ok) throw new Error(res.statusText);
+            return res.json();
+        }
+
+        async function postJSON(path, data) {
+            const res = await fetch('/api' + path, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data)
+            });
+            if (!res.ok) throw new Error(res.statusText);
+            return res.json();
+        }
+
+        function showNotification(message, type = 'success') {
+            const container = document.getElementById('notificationContainer');
+            const notif = document.createElement('div');
+            notif.className = `notification ${type}`;
+            notif.textContent = message;
+            container.appendChild(notif);
+            setTimeout(() => notif.remove(), 3000);
+        }
+
+        async function loadConfig() {
+            try {
+                const res = await fetch('/api/config');
+                if (!res.ok) throw new Error(res.statusText);
+                const yamlText = await res.text();
+                configContent = yamlText;
+                document.getElementById('configEditor').value = yamlText;
+                showNotification('配置加载成功');
+            } catch (err) {
+                showNotification('加载配置失败：' + err.message, 'error');
+            }
+        }
+
+        async function saveConfig() {
+            try {
+                const value = document.getElementById('configEditor').value;
+                const data = jsyaml.load(value);
+                await postJSON('/config', data);
+                configContent = value;
+                showNotification('配置保存成功');
+            } catch (err) {
+                showNotification('保存失败：' + err.message, 'error');
+            }
+        }
+
+        function resetConfig() {
+            if (configContent) {
+                document.getElementById('configEditor').value = configContent;
+                showNotification('配置已重置');
+            }
+        }
+
+        async function reloadConfig() {
+            try {
+                await postJSON('/config/reload', {});
+                await loadSchedulerStatus();
+                showNotification('配置重新加载成功');
+            } catch (err) {
+                showNotification('重新加载失败：' + err.message, 'error');
+            }
+        }
+
+        function switchTab(tabName) {
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+            
+            document.querySelector(`button[onclick="switchTab('${tabName}')"]`).classList.add('active');
+            document.getElementById(tabName + 'Tab').classList.add('active');
+        }
+
+        async function loadSchedulerStatus() {
+            try {
+                const data = await fetchJSON('/scheduler/status');
+                document.getElementById('taskCount').textContent = data.cron_count;
+                document.getElementById('scheduledCount').textContent = data.cron_count;
+                document.getElementById('lastUpdate').textContent = new Date().toLocaleString('zh-CN');
+                
+                renderRepos(data.repos);
+            } catch (err) {
+                showNotification('加载任务状态失败：' + err.message, 'error');
+            }
+        }
+
+        async function loadBuildingStatus() {
+            try {
+                const data = await fetchJSON('/build/status');
+                document.getElementById('buildingCount').textContent = data.building.length;
+                
+                data.building.forEach(index => {
+                    const card = document.getElementById(`repo-card-${index}`);
+                    if (card) {
+                        const badge = card.querySelector('.status-badge');
+                        if (badge) badge.className = 'status-badge status-building';
+                        const stopBtn = card.querySelector('.btn-warning');
+                        if (stopBtn) stopBtn.style.display = 'inline-block';
+                    }
+                });
+                
+                document.querySelectorAll('.btn-warning').forEach(btn => {
+                    const index = parseInt(btn.dataset.index);
+                    if (!data.building.includes(index)) {
+                        btn.style.display = 'none';
+                    }
+                });
+            } catch (err) {
+                console.error('加载构建状态失败:', err);
+            }
+        }
+
+        function renderRepos(repos) {
+            const container = document.getElementById('repoList');
+            container.innerHTML = repos.map((repo, index) => `
+                <div class="repo-card" id="repo-card-${index}">
+                    <h3>${repo.name_task || repo.url || '未命名任务'}</h3>
+                    <div class="repo-info">
+                        <div class="repo-info-item"><strong>URL:</strong> ${repo.url || '-'}</div>
+                        <div class="repo-info-item"><strong>分支:</strong> ${repo.tag_branch || '-'}</div>
+                        <div class="repo-info-item"><strong>标签:</strong> ${repo.tag_docker || '-'}</div>
+                        <div class="repo-info-item"><strong>仓库:</strong> ${repo.auth || '-'}</div>
+                        <div class="repo-info-item"><strong>Cron:</strong> ${repo.cron || '-'}</div>
+                        <div class="repo-info-item"><strong>状态:</strong>
+                            <span class="status-badge ${repo.enabled ? 'status-active' : 'status-inactive'}">
+                                ${repo.enabled ? '已启用' : '已禁用'}
+                            </span>
+                        </div>
+                    </div>
+                    <div class="repo-actions">
+                        <button class="btn btn-success" onclick="triggerBuild(${index})">
+                            ▶️ 临时构建
+                        </button>
+                        <button class="btn btn-warning" onclick="stopBuild(${index})" data-index="${index}" style="display:none;">
+                            ⏹️ 停止构建
+                        </button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        async function triggerBuild(index) {
+            try {
+                await postJSON('/build/trigger', { repo_index: index });
+                showNotification('构建任务已启动');
+                await loadBuildingStatus();
+            } catch (err) {
+                showNotification('启动构建失败：' + err.message, 'error');
+            }
+        }
+
+        async function stopBuild(index) {
+            try {
+                await postJSON('/build/stop', { repo_index: index });
+                showNotification('构建已停止');
+                await loadBuildingStatus();
+            } catch (err) {
+                showNotification('停止构建失败：' + err.message, 'error');
+            }
+        }
+
+        let logController = null;
+        let autoScroll = true;
+        let logLineCount = 0;
+
+        async function initLogViewer() {
+            const logViewer = document.getElementById('logViewer');
+            logViewer.value = '';
+            logLineCount = 0;
+            updateLogLines();
+
+            if (logController) {
+                logController.abort();
+            }
+
+            const logStatus = document.getElementById('logStatus');
+            logStatus.textContent = '● 正在连接日志流...';
+            logStatus.style.color = '#ffa500';
+
+            logController = new AbortController();
+            
+            try {
+                const response = await fetch('/api/logs/stream', {
+                    signal: logController.signal,
+                    headers: {
+                        'Cache-Control': 'no-cache',
+                        'Accept': 'text/plain'
+                    }
+                });
+
+                if (!response.ok) {
+                    throw new Error('Failed to connect to log stream');
+                }
+
+                logStatus.textContent = '● 已连接';
+                logStatus.style.color = '#28a745';
+
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
+
+                while (true) {
+                    const { value, done } = await reader.read();
+                    if (done) break;
+                    
+                    const text = decoder.decode(value);
+                    logViewer.value += text;
+                    logLineCount = logViewer.value.split('\n').length;
+                    updateLogLines();
+                    
+                    if (autoScroll) {
+                        logViewer.scrollTop = logViewer.scrollHeight;
+                    }
+                }
+            } catch (err) {
+                if (err.name === 'AbortError') {
+                    return;
+                }
+                logStatus.textContent = '● 已断开连接';
+                logStatus.style.color = '#dc3545';
+                
+                setTimeout(() => {
+                    logStatus.textContent = '● 重新连接中...';
+                    initLogViewer();
+                }, 3000);
+            }
+        }
+
+        function toggleAutoScroll() {
+            autoScroll = !autoScroll;
+            const btn = document.getElementById('autoScrollBtn');
+            btn.textContent = autoScroll ? '⏬ 自动滚动：开启' : '⏸️ 自动滚动：暂停';
+        }
+
+        function clearLogs() {
+            const logViewer = document.getElementById('logViewer');
+            logViewer.value = '';
+            logLineCount = 0;
+            updateLogLines();
+            showNotification('日志已清空');
+        }
+
+        function updateLogLines() {
+            document.getElementById('logLines').textContent = `行数：${logLineCount}`;
+        }
+
+        async function init() {
+            await loadConfig();
+            await loadSchedulerStatus();
+            await loadBuildingStatus();
+            
+            setInterval(loadBuildingStatus, 2000);
+            
+            initLogViewer();
+        }
+
+        document.addEventListener('DOMContentLoaded', init);
+    </script>
+</body>
+</html>

@@ -34,15 +34,15 @@ func (c *Client) BuildImage(ctx context.Context, contextDir, dockerfilePath, ima
 	}
 
 	if proxyConfig != nil && proxyConfig.Enabled {
-		fmt.Printf("[DOCKER] Using proxy: HTTP=%s, HTTPS=%s\n", proxyConfig.HTTP, proxyConfig.HTTPS)
+		fmt.Printf("[DOCKER] Using proxy: HTTP=%s, HTTPS=%s\n", proxyConfig.Http, proxyConfig.Https)
 
-		if proxyConfig.HTTP != "" {
-			buildxCmd.Args = append(buildxCmd.Args, "--build-arg", fmt.Sprintf("HTTP_PROXY=%s", proxyConfig.HTTP))
-			buildxCmd.Args = append(buildxCmd.Args, "--build-arg", fmt.Sprintf("http_proxy=%s", proxyConfig.HTTP))
+		if proxyConfig.Http != "" {
+			buildxCmd.Args = append(buildxCmd.Args, "--build-arg", fmt.Sprintf("HTTP_PROXY=%s", proxyConfig.Http))
+			buildxCmd.Args = append(buildxCmd.Args, "--build-arg", fmt.Sprintf("http_proxy=%s", proxyConfig.Http))
 		}
-		if proxyConfig.HTTPS != "" {
-			buildxCmd.Args = append(buildxCmd.Args, "--build-arg", fmt.Sprintf("HTTPS_PROXY=%s", proxyConfig.HTTPS))
-			buildxCmd.Args = append(buildxCmd.Args, "--build-arg", fmt.Sprintf("https_proxy=%s", proxyConfig.HTTPS))
+		if proxyConfig.Https != "" {
+			buildxCmd.Args = append(buildxCmd.Args, "--build-arg", fmt.Sprintf("HTTPS_PROXY=%s", proxyConfig.Https))
+			buildxCmd.Args = append(buildxCmd.Args, "--build-arg", fmt.Sprintf("https_proxy=%s", proxyConfig.Https))
 		}
 		if proxyConfig.NoProxy != "" {
 			buildxCmd.Args = append(buildxCmd.Args, "--build-arg", fmt.Sprintf("NO_PROXY=%s", proxyConfig.NoProxy))

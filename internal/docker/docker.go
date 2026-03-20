@@ -105,14 +105,14 @@ func (c *Client) Login(ctx context.Context, username, password string) error {
 
 	// 如果启用了代理，设置环境变量
 	if c.proxyCfg != nil && c.proxyCfg.Enabled {
-		if c.proxyCfg.HTTP != "" {
-			err := os.Setenv("HTTP_PROXY", c.proxyCfg.HTTP)
+		if c.proxyCfg.Http != "" {
+			err := os.Setenv("HTTP_PROXY", c.proxyCfg.Http)
 			if err != nil {
 				return err
 			}
 		}
-		if c.proxyCfg.HTTPS != "" {
-			err := os.Setenv("HTTPS_PROXY", c.proxyCfg.HTTPS)
+		if c.proxyCfg.Https != "" {
+			err := os.Setenv("HTTPS_PROXY", c.proxyCfg.Https)
 			if err != nil {
 				return err
 			}
@@ -123,7 +123,8 @@ func (c *Client) Login(ctx context.Context, username, password string) error {
 				return err
 			}
 		}
-		fmt.Printf("[DOCKER] Proxy enabled: HTTP_PROXY=%s, HTTPS_PROXY=%s, NO_PROXY=%s\n", c.proxyCfg.HTTP, c.proxyCfg.HTTPS, c.proxyCfg.NoProxy)
+		fmt.Printf("[DOCKER] Proxy enabled: HTTP_PROXY=%s, HTTPS_PROXY=%s, NO_PROXY=%s\n",
+			c.proxyCfg.Http, c.proxyCfg.Https, c.proxyCfg.NoProxy)
 	} else {
 		fmt.Printf("[DOCKER] Proxy disabled\n")
 	}

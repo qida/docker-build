@@ -5,3 +5,4 @@ go.sum
 config.yaml
 docker-build.log
 nohup.out
+dockerfile/*

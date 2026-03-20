@@ -6,12 +6,16 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"os/signal"
+	"syscall"
 
+	"docker-build/internal/api"
 	"docker-build/internal/config"
 	"docker-build/internal/docker"
 	"docker-build/internal/git"
 	"docker-build/internal/logx"
 	"docker-build/internal/scheduler"
+	"docker-build/internal/server"
 )
 
 func main() {
@@ -29,6 +33,8 @@ func main() {
 		log.Printf("Error loading config: %v\n", err)
 		os.Exit(1)
 	}
+
+	webAddr := fmt.Sprintf("%s:%d", cfg.WebHttp.Ip, cfg.WebHttp.Port)
 
 	dockerClient, err := docker.NewClient()
 	if err != nil {
@@ -53,6 +59,19 @@ func main() {
 	sched.SetClients(map[string]git.GitClient{"gitea": giteaClient, "github": githubClient}, dockerClient)
 	sched.Start()
 
+	apiHandler := api.NewAPIHandler(*configPath, sched, map[string]git.GitClient{"gitea": giteaClient, "github": githubClient}, dockerClient)
+	if err := apiHandler.LoadConfig(); err != nil {
+		log.Printf("Warning: failed to load config for API: %v\n", err)
+	}
+
+	webServer := server.NewWebServer(webAddr, apiHandler)
+
+	go func() {
+		if err := webServer.Start(); err != nil {
+			log.Printf("Error starting web server: %v\n", err)
+		}
+	}()
+
 	configWatcher, err := config.NewConfigWatcher(*configPath, func() {
 		log.Printf("[INFO] Config file changed, reloading...\n")
 		newCfg, err := config.LoadConfig(*configPath)
@@ -62,6 +81,7 @@ func main() {
 		}
 		sched.SetConfig(newCfg)
 		sched.Restart()
+		apiHandler.LoadConfig()
 	})
 	if err != nil {
 		log.Printf("[ERROR] Failed to create config watcher: %v\n", err)
@@ -69,6 +89,17 @@ func main() {
 		configWatcher.Start()
 	}
 
+	log.Printf("[INFO] Web server available at http://%s:%d\n", cfg.WebHttp.Ip, cfg.WebHttp.Port)
 	log.Println("[INFO] Docker build scheduler started. Press Ctrl+C to exit.")
-	select {}
+
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
+	<-sigChan
+
+	log.Println("[INFO] Shutting down...")
+	sched.Stop()
+	if err := webServer.Shutdown(); err != nil {
+		log.Printf("Error shutting down web server: %v\n", err)
+	}
+	log.Println("[INFO] Goodbye!")
 }

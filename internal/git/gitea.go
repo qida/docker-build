@@ -25,7 +25,6 @@ func NewGiteaClient(token string, baseURL string) *GiteaClient {
 		log.Printf("[ERROR] gitea NewClient failed: %s\n", err)
 		return nil
 	}
-	log.Printf("[DEBUG] gitea client: %+v\n", client)
 	return &GiteaClient{
 		client: client,
 		ctx:    ctx,

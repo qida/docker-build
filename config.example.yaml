@@ -1,3 +1,7 @@
+web_http:
+  ip: "0.0.0.0"
+  port: 8080
+  
 docker_hub:
   username: "name"
   password: "dckr_pat_fYrK7Smu5xx"
@@ -18,6 +22,7 @@ proxy:
 
 repositories:
   - url: "https://github.com/sipeed/picoclaw" #仓库地址，目前只支持Github仓库
+    name_task: "picoclaw"
     enabled: false #是否启用构建，默认false
     auth: "github" #认证方式，默认github
     tag_branch: "main" #指定tag或branch
