@@ -4,14 +4,14 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"os"
 	"os/exec"
 	"strings"
 
 	"docker-build/internal/config"
+	"docker-build/internal/logx"
 )
 
-// 无git，本地构建镜像
+// 无 git，本地构建镜像
 func (c *Client) BuildImage(ctx context.Context, contextDir, dockerfilePath, imageName string, platforms []string, buildArgs map[string]string, proxyConfig *config.ProxyConfig) error {
 	log.Printf("[DOCKER] Building image from contextDir %s with Dockerfile %s. imageName:%s..\n", contextDir, dockerfilePath, imageName)
 
@@ -49,8 +49,9 @@ func (c *Client) BuildImage(ctx context.Context, contextDir, dockerfilePath, ima
 			buildxCmd.Args = append(buildxCmd.Args, "--build-arg", fmt.Sprintf("no_proxy=%s", proxyConfig.NoProxy))
 		}
 	}
-	buildxCmd.Stdout = os.Stdout
-	buildxCmd.Stderr = os.Stderr
+	multiWriter := logx.GetMultiWriter()
+	buildxCmd.Stdout = multiWriter
+	buildxCmd.Stderr = multiWriter
 	if err := buildxCmd.Start(); err != nil {
 		return fmt.Errorf("failed to start buildx: %v", err)
 	}
