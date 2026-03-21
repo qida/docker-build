@@ -53,9 +53,9 @@ type NtfyConfig struct {
 
 type DingtalkConfig struct {
 	Enabled      bool     `yaml:"enabled" json:"enabled"`
-	ClientID     string   `yaml:"client_id" json:"client_id"`
-	ClientSecret string   `yaml:"client_secret" json:"client_secret,omitempty"`
-	AllowFrom    []string `yaml:"allow_from,omitempty" json:"allow_from,omitempty"`
+	Webhook      string   `yaml:"webhook,omitempty" json:"webhook,omitempty"`
+	ClientID     string   `yaml:"client_id,omitempty" json:"client_id,omitempty"`
+	ClientSecret string   `yaml:"client_secret,omitempty" json:"client_secret,omitempty"`
 }
 type RepositoryConfig struct {
 	NameTask          string            `yaml:"name_task,omitempty" json:"name_task,omitempty"`

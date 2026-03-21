@@ -6,3 +6,4 @@ config.yaml
 docker-build.log
 nohup.out
 dockerfile/*
+kill.sh

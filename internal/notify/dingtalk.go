@@ -30,8 +30,13 @@ type DingtalkNotifier struct {
 
 // NewDingtalkNotifier 创建钉钉通知发送器
 func NewDingtalkNotifier(config *config.DingtalkConfig) *DingtalkNotifier {
-	if config.ClientID == "" || config.ClientSecret == "" {
-		log.Printf("[DINGTALK] client_id or client_secret not configured")
+	if !config.Enabled {
+		return nil
+	}
+
+	// 优先使用自定义机器人（webhook 方式），其次使用企业内部应用（client_id/client_secret 方式）
+	if config.Webhook == "" && (config.ClientID == "" || config.ClientSecret == "") {
+		log.Printf("[DINGTALK] webhook or client_id/client_secret not configured")
 		return nil
 	}
 
@@ -42,13 +47,18 @@ func NewDingtalkNotifier(config *config.DingtalkConfig) *DingtalkNotifier {
 		},
 	}
 
-	// 预获取 access token
-	if _, err := notifier.getAccessToken(); err != nil {
-		log.Printf("[DINGTALK] Failed to get access token: %v", err)
-		return nil
+	// 优先使用自定义机器人
+	if config.Webhook != "" {
+		log.Printf("[DINGTALK] Notifier initialized with custom robot (webhook)")
+	} else if config.ClientID != "" && config.ClientSecret != "" {
+		// 仅在 webhook 未配置时使用企业内部应用
+		if _, err := notifier.getAccessToken(); err != nil {
+			log.Printf("[DINGTALK] Failed to get access token: %v", err)
+			return nil
+		}
+		log.Printf("[DINGTALK] Notifier initialized with enterprise app, token expires at %s", notifier.tokenExpiry)
 	}
 
-	log.Printf("[DINGTALK] Notifier initialized successfully")
 	return notifier
 }
 
@@ -79,19 +89,18 @@ func (d *DingtalkNotifier) getAccessToken() (string, error) {
 		ExpiresIn   int    `json:"expiresIn"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		log.Printf("[ERROR] Body:%s", resp.Body)
 		return "", fmt.Errorf("failed to decode token response: %v", err)
 	}
-
 	if result.AccessToken == "" {
 		return "", fmt.Errorf("failed to get access token from dingtalk")
 	}
 
 	d.accessToken = result.AccessToken
-	// 提前 10 分钟过期
-	d.tokenExpiry = time.Now().Add(time.Duration(result.ExpiresIn-600) * time.Second)
+	log.Printf("[DEBUG] AccessToken:%s",d.accessToken)
+	// 提前 1 分钟过期
+	d.tokenExpiry = time.Now().Add(time.Duration(7200-60) * time.Second)
 
-	log.Printf("[DINGTALK] Got new access token, expires in %d seconds", result.ExpiresIn)
+	log.Printf("[DINGTALK] Got new access token, expires at %s", d.tokenExpiry)
 	return d.accessToken, nil
 }
 
@@ -106,12 +115,6 @@ func (d *DingtalkNotifier) sendMessage(title, content string) error {
 		return nil
 	}
 
-	// 获取 access token
-	accessToken, err := d.getAccessToken()
-	if err != nil {
-		return fmt.Errorf("failed to get access token: %v", err)
-	}
-
 	// 构建消息
 	msg := DingtalkMessage{
 		Msgtype: "markdown",
@@ -124,15 +127,35 @@ func (d *DingtalkNotifier) sendMessage(title, content string) error {
 		return fmt.Errorf("failed to marshal message: %v", err)
 	}
 
-	// 发送消息到机器人 API
-	url := "https://api.dingtalk.com/v1.0/robot/oToMessages/send"
-	req, err := http.NewRequest("POST", url, bytes.NewBuffer(body))
-	if err != nil {
-		return fmt.Errorf("failed to create request: %v", err)
-	}
+	var url string
+	var req *http.Request
 
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("x-acs-dingtalk-access-token", accessToken)
+	// 优先使用自定义机器人（webhook 方式）
+	if d.config.Webhook != "" {
+		// webhook 方式（自定义机器人）
+		url = d.config.Webhook
+		req, err = http.NewRequest("POST", url, bytes.NewBuffer(body))
+		if err != nil {
+			return fmt.Errorf("failed to create request: %v", err)
+		}
+		req.Header.Set("Content-Type", "application/json")
+	} else if d.config.ClientID != "" && d.config.ClientSecret != "" {
+		// 企业内部应用方式（仅在 webhook 未配置时使用）
+		accessToken, err := d.getAccessToken()
+		if err != nil {
+			return fmt.Errorf("failed to get access token: %v", err)
+		}
+
+		url = "https://api.dingtalk.com/v1.0/robot/oToMessages/send"
+		req, err = http.NewRequest("POST", url, bytes.NewBuffer(body))
+		if err != nil {
+			return fmt.Errorf("failed to create request: %v", err)
+		}
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("x-acs-dingtalk-access-token", accessToken)
+	} else {
+		return fmt.Errorf("no valid notification method configured")
+	}
 
 	resp, err := d.client.Do(req)
 	if err != nil {
@@ -140,16 +163,25 @@ func (d *DingtalkNotifier) sendMessage(title, content string) error {
 	}
 	defer resp.Body.Close()
 
-	var result struct {
-		Code    int    `json:"code"`
-		Message string `json:"message"`
-	}
+	// 记录响应
+	var result map[string]interface{}
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		log.Printf("[ERROR] failed to decode response: %v", err)
 		return fmt.Errorf("failed to decode response: %v", err)
 	}
 
-	if result.Code != 0 {
-		return fmt.Errorf("dingtalk returned error: %d - %s", result.Code, result.Message)
+	// webhook 方式检查 errcode
+	if d.config.Webhook != "" {
+		if errcode, ok := result["errcode"].(float64); ok && errcode != 0 {
+			errmsg := result["errmsg"]
+			return fmt.Errorf("dingtalk webhook error: %v - %v", errcode, errmsg)
+		}
+	} else {
+		// 企业内部应用方式检查 code
+		if code, ok := result["code"].(float64); ok && code != 0 {
+			message := result["message"]
+			return fmt.Errorf("dingtalk api error: %v - %v", code, message)
+		}
 	}
 
 	log.Printf("[DINGTALK] Sent: %s", title)

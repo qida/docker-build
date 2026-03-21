@@ -132,6 +132,12 @@ func (h *APIHandler) UpdateConfig(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if err := h.ReloadNotifier(); err != nil {
+		log.Printf("[ERROR] Failed to reload notifier: %v\n", err)
+		http.Error(w, "failed to reload notifier: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{"status": "success", "message": "config updated"})
 }
@@ -150,6 +156,30 @@ func (h *APIHandler) ReloadScheduler() error {
 	h.scheduler.SetConfig(cfg)
 	h.scheduler.SetClients(gitClients, dockerClient)
 
+	return nil
+}
+
+func (h *APIHandler) ReloadNotifier() error {
+	h.mu.RLock()
+	cfg := h.cfg
+	h.mu.RUnlock()
+
+	if cfg == nil {
+		return fmt.Errorf("config not loaded")
+	}
+
+	// 创建新的通知管理器
+	newNotifier := notify.NewManager(cfg.Notify)
+
+	// 原子性地更新 notifier
+	h.mu.Lock()
+	h.notifier = newNotifier
+	h.mu.Unlock()
+
+	// 同时更新 scheduler 中的 notifier
+	h.scheduler.SetNotifier(newNotifier)
+
+	log.Printf("[NOTIFY] Notifier reloaded successfully")
 	return nil
 }
 
