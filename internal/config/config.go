@@ -3,7 +3,9 @@ package config
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"gopkg.in/yaml.v3"
@@ -37,6 +39,24 @@ type ProxyConfig struct {
 	NoProxy string `yaml:"no_proxy,omitempty" json:"no_proxy"`
 }
 
+type NotifyConfig struct {
+	Ntfy     *NtfyConfig     `yaml:"ntfy,omitempty" json:"ntfy,omitempty"`
+	Dingtalk *DingtalkConfig `yaml:"dingtalk,omitempty" json:"dingtalk,omitempty"`
+}
+
+type NtfyConfig struct {
+	Enabled bool   `yaml:"enabled" json:"enabled"`
+	URL     string `yaml:"url" json:"url"`
+	Topic   string `yaml:"topic" json:"topic"`
+	Token   string `yaml:"token,omitempty" json:"token,omitempty"`
+}
+
+type DingtalkConfig struct {
+	Enabled      bool     `yaml:"enabled" json:"enabled"`
+	ClientID     string   `yaml:"client_id" json:"client_id"`
+	ClientSecret string   `yaml:"client_secret" json:"client_secret,omitempty"`
+	AllowFrom    []string `yaml:"allow_from,omitempty" json:"allow_from,omitempty"`
+}
 type RepositoryConfig struct {
 	NameTask          string            `yaml:"name_task,omitempty" json:"name_task,omitempty"`
 	Enabled           *bool             `yaml:"enabled,omitempty" json:"enabled,omitempty"`
@@ -50,6 +70,9 @@ type RepositoryConfig struct {
 	DockerfileUser    string            `yaml:"dockerfile_user,omitempty" json:"dockerfile_user,omitempty"`
 	Cron              string            `yaml:"cron,omitempty" json:"cron,omitempty"`
 	Timeout           string            `yaml:"timeout,omitempty" json:"timeout,omitempty"`
+
+	NameImage string `yaml:"-" json:"-"` //镜像名称，动态生成
+	NameRepo  string `yaml:"-" json:"-"` //仓库名称，动态生成
 }
 
 type Config struct {
@@ -58,6 +81,7 @@ type Config struct {
 	GitHub       GitHubConfig       `yaml:"github" json:"github"`
 	Gitea        *GiteaConfig       `yaml:"gitea" json:"gitea,omitempty"`
 	Proxy        *ProxyConfig       `yaml:"proxy,omitempty" json:"proxy,omitempty"`
+	Notify       *NotifyConfig      `yaml:"notify,omitempty" json:"notify,omitempty"`
 	Repositories []RepositoryConfig `yaml:"repositories" json:"repositories"`
 }
 
@@ -76,7 +100,7 @@ func LoadConfig(filePath string) (*Config, error) {
 	if cfg.WebHttp.Ip == "" {
 		cfg.WebHttp.Ip = "0.0.0.0"
 	}
-	
+
 	if cfg.WebHttp.Port == 0 {
 		cfg.WebHttp.Port = 8080
 	}
@@ -122,13 +146,38 @@ func LoadConfig(filePath string) (*Config, error) {
 		}
 
 		cfg.Repositories[i].URL = strings.TrimRight(repo.URL, ".git")
-
-		if repo.URL == "" && repo.DockerfileUser == "" {
+		// if repo.URL == "" && repo.DockerfileUser == "" {
+		// 	return nil, errMissingFieldAt("repositories", i, "url or dockerfile_user")
+		// }
+		//生成镜像名称
+		err = updateRepoImageName(cfg.DockerHub.Username, &repo)
+		if err != nil {
 			return nil, errMissingFieldAt("repositories", i, "url or dockerfile_user")
 		}
+		cfg.Repositories[i] = repo
 	}
 
 	return &cfg, nil
+}
+
+func updateRepoImageName(nameuser string, repo *RepositoryConfig) error {
+	if repo.URL != "" {
+		parts := strings.Split(repo.URL, "/")
+		name := parts[len(parts)-1]
+		repo.NameRepo = strings.TrimSuffix(name, ".git")
+	} else if repo.DockerfileUser != "" {
+		//如果用户自定义了 Dockerfile 文件路径，那么就使用用户自定义的 Dockerfile 的父级目录名作为仓库名
+		repo.NameRepo = filepath.Base(filepath.Dir(repo.DockerfileUser))
+	} else {
+		return errMissingField("url or or dockerfile_user")
+	}
+	if repo.TagBranch == "main" || repo.TagBranch == "master" {
+		repo.NameImage = strings.ToLower(fmt.Sprintf("%s/%s:%s", nameuser, repo.NameRepo, repo.TagDocker))
+	} else {
+		repo.NameImage = strings.ToLower(fmt.Sprintf("%s/%s-%s:%s", nameuser, repo.NameRepo, repo.TagBranch, repo.TagDocker))
+	}
+	log.Printf("[INFO] NameRepo:%s NameImage:%s \r\n", repo.NameRepo, repo.NameImage)
+	return nil
 }
 
 func (c *Config) Validate() error {

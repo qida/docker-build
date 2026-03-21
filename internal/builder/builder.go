@@ -47,7 +47,7 @@ func BuildRepository(ctx context.Context, cfg *config.Config, gitClient git.GitC
 		return err
 	}
 	//执行构建
-	imageName := getImageName(repo.TagBranch, cfg.DockerHub.Username, getRepoName(&repo), repo.TagDocker)
+	imageName := GetImageName(cfg.DockerHub.Username, GetRepoName(&repo), repo.TagBranch, repo.TagDocker)
 	log.Printf("[INFO] Building and pushing Docker image: %s...\n", imageName)
 	var buildErr error
 	buildErr = dockerClient.BuildImage(ctx, contextDir, dockerfilePath, imageName, repo.Platforms, repo.BuildArgs, cfg.Proxy)
@@ -86,7 +86,7 @@ func isBranchExist(repo config.RepositoryConfig, gitClient git.GitClient) (strin
 	valid, err := gitClient.ValidateBranch(repo.URL, repo.TagBranch)
 	if err != nil {
 		log.Printf("[ERROR] Failed to validate branch %s for %s: %v\n", repo.TagBranch, repo.URL, err)
-		return "", false
+		// return "", false
 	}
 	if valid {
 		return repo.TagBranch, true
@@ -132,20 +132,20 @@ func cloneRepository(ctx context.Context, repoURL, branch, contextDir, auth stri
 	return cmd.Run()
 }
 
-func getRepoName(repo *config.RepositoryConfig) string {
+func GetRepoName(repo *config.RepositoryConfig) string {
 	if repo.URL != "" {
 		parts := strings.Split(repo.URL, "/")
 		name := parts[len(parts)-1]
 		return strings.TrimSuffix(name, ".git")
 	}
 	if repo.DockerfileUser != "" {
-		//如果用户自定义了Dockerfile文件路径，那么就使用用户自定义的Dockerfile的父级目录名作为仓库名
+		//如果用户自定义了 Dockerfile 文件路径，那么就使用用户自定义的 Dockerfile 的父级目录名作为仓库名
 		return filepath.Base(filepath.Dir(repo.DockerfileUser))
 	}
 	return ""
 }
 
-func getImageName(tag_branch, username, repo_name, tag_name string) string {
+func GetImageName(username, repo_name, tag_branch, tag_name string) string {
 	if tag_name == "" {
 		tag_name = "latest"
 	}

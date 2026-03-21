@@ -14,6 +14,7 @@ import (
 	"docker-build/internal/docker"
 	"docker-build/internal/git"
 	"docker-build/internal/logx"
+	"docker-build/internal/notify"
 	"docker-build/internal/scheduler"
 	"docker-build/internal/server"
 )
@@ -54,12 +55,16 @@ func main() {
 	giteaClient := git.NewGiteaClient(cfg.Gitea.Token, cfg.Gitea.Url)
 	githubClient := git.NewGitHubClient(cfg.GitHub.Token)
 
+	// 初始化通知管理器
+	notifyManager := notify.NewManager(cfg.Notify)
+
 	sched := scheduler.NewScheduler()
 	sched.SetConfig(cfg)
 	sched.SetClients(map[string]git.GitClient{"gitea": giteaClient, "github": githubClient}, dockerClient)
+	sched.SetNotifier(notifyManager)
 	sched.Start()
 
-	apiHandler := api.NewAPIHandler(*configPath, sched, map[string]git.GitClient{"gitea": giteaClient, "github": githubClient}, dockerClient)
+	apiHandler := api.NewAPIHandler(*configPath, sched, map[string]git.GitClient{"gitea": giteaClient, "github": githubClient}, dockerClient, notifyManager)
 	if err := apiHandler.LoadConfig(); err != nil {
 		log.Printf("Warning: failed to load config for API: %v\n", err)
 	}

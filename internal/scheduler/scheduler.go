@@ -8,6 +8,7 @@ import (
 	"docker-build/internal/config"
 	"docker-build/internal/docker"
 	"docker-build/internal/git"
+	"docker-build/internal/notify"
 
 	"github.com/robfig/cron/v3"
 )
@@ -18,12 +19,19 @@ type Scheduler struct {
 	cfg           *config.Config
 	gitClients    map[string]git.GitClient
 	dockerClient  *docker.Client
+	notifier      *notify.Manager
 }
 
 func NewScheduler() *Scheduler {
 	return &Scheduler{
 		cronScheduler: cron.New(cron.WithLocation(time.Local)),
 	}
+}
+
+func (s *Scheduler) SetNotifier(notifier *notify.Manager) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.notifier = notifier
 }
 
 func (s *Scheduler) SetConfig(cfg *config.Config) {
@@ -55,7 +63,7 @@ func (s *Scheduler) Start() {
 		}
 		if repo.Cron == "" {
 			log.Printf("[INFO] Building immediately (cron not set): %s\n", repo.URL)
-			go buildRepositoryTask(s.cfg, &gitClient, s.dockerClient, repo)
+			go buildRepositoryTaskWithNotify(s.cfg, &gitClient, s.dockerClient, repo, s.notifier)
 		} else {
 			if repo.URL == "" {
 				log.Printf("[INFO] Scheduled build with cron '%s': %s\n", repo.Cron, repo.DockerfileUser)
@@ -64,7 +72,7 @@ func (s *Scheduler) Start() {
 			}
 			_, err := s.cronScheduler.AddFunc(repo.Cron, func() {
 				log.Printf("[INFO] Starting scheduled build for %s\n", repo.URL)
-				go buildRepositoryTask(s.cfg, &gitClient, s.dockerClient, repo)
+				go buildRepositoryTaskWithNotify(s.cfg, &gitClient, s.dockerClient, repo, s.notifier)
 			})
 			if err != nil {
 				log.Printf("[ERROR] Failed to schedule build for %s: %v\n", repo.URL, err)
@@ -98,7 +106,7 @@ func (s *Scheduler) Restart() {
 		}
 		if repo.Cron == "" {
 			log.Printf("[INFO] Building immediately (cron not set): %s\n", repo.URL)
-			go buildRepositoryTask(s.cfg, &gitClient, s.dockerClient, repo)
+			go buildRepositoryTaskWithNotify(s.cfg, &gitClient, s.dockerClient, repo, s.notifier)
 		} else {
 			if repo.URL == "" {
 				log.Printf("[INFO] Scheduled build with cron '%s': %s\n", repo.Cron, repo.DockerfileUser)
@@ -107,7 +115,7 @@ func (s *Scheduler) Restart() {
 			}
 			_, err := s.cronScheduler.AddFunc(repo.Cron, func() {
 				log.Printf("[INFO] Starting scheduled build for %s\n", repo.URL)
-				go buildRepositoryTask(s.cfg, &gitClient, s.dockerClient, repo)
+				go buildRepositoryTaskWithNotify(s.cfg, &gitClient, s.dockerClient, repo, s.notifier)
 			})
 			if err != nil {
 				log.Printf("[ERROR] Failed to schedule build for %s: %v\n", repo.URL, err)

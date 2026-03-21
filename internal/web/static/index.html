@@ -344,12 +344,18 @@
         </header>
 
         <div class="tabs">
-            <button class="tab active" onclick="switchTab('config')">📝 配置管理</button>
-            <button class="tab" onclick="switchTab('scheduler')">⚙️ 任务管理</button>
+            <button class="tab active" onclick="switchTab('scheduler')">⚙️ 任务管理</button>
+            <button class="tab" onclick="switchTab('config')">📝 配置管理</button>
             <button class="tab" onclick="switchTab('logs')">📋 日志查看</button>
         </div>
+        
+        <div id="schedulerTab" class="tab-content active">
+            <div class="section-title">任务调度信息</div>
 
-        <div id="configTab" class="tab-content active">
+            <div id="repoList" class="repo-list"></div>
+        </div>
+
+        <div id="configTab" class="tab-content">
             <div class="section-title">配置文件编辑</div>
             <div class="form-group">
                 <label for="configEditor">config.yaml</label>
@@ -359,12 +365,6 @@
                 <button class="btn btn-primary" onclick="saveConfig()">💾 保存配置</button>
                 <button class="btn btn-danger" onclick="resetConfig()">🔄 重置配置</button>
             </div>
-        </div>
-
-        <div id="schedulerTab" class="tab-content">
-            <div class="section-title">任务调度信息</div>
-
-            <div id="repoList" class="repo-list"></div>
         </div>
 
         <div id="logsTab" class="tab-content">

@@ -15,6 +15,7 @@ import (
 	"docker-build/internal/config"
 	"docker-build/internal/docker"
 	"docker-build/internal/git"
+	"docker-build/internal/notify"
 	"docker-build/internal/scheduler"
 )
 
@@ -30,13 +31,14 @@ type APIHandler struct {
 	scheduler       *scheduler.Scheduler
 	gitClients      map[string]git.GitClient
 	dockerClient    *docker.Client
+	notifier        *notify.Manager
 	buildingRepos   map[int]bool
 	buildingReposMu sync.Mutex
 	buildContexts   map[int]context.CancelFunc
 	buildContextsMu sync.Mutex
 }
 
-func NewAPIHandler(cfgPath string, sched *scheduler.Scheduler, gitClients map[string]git.GitClient, dockerClient *docker.Client) *APIHandler {
+func NewAPIHandler(cfgPath string, sched *scheduler.Scheduler, gitClients map[string]git.GitClient, dockerClient *docker.Client, notifier *notify.Manager) *APIHandler {
 	return &APIHandler{
 		cfg:           nil,
 		cfgPath:       cfgPath,
@@ -44,6 +46,7 @@ func NewAPIHandler(cfgPath string, sched *scheduler.Scheduler, gitClients map[st
 		scheduler:     sched,
 		gitClients:    gitClients,
 		dockerClient:  dockerClient,
+		notifier:      notifier,
 		buildingRepos: make(map[int]bool),
 		buildContexts: make(map[int]context.CancelFunc),
 	}
@@ -247,16 +250,35 @@ func (h *APIHandler) TriggerBuild(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		if err := builder.BuildRepository(ctx, cfg, gitClient, h.dockerClient, repo); err != nil {
+		// repoName := builder.GetRepoName(&repo)
+		// imageName := builder.GetImageName(cfg.DockerHub.Username, repoName, repo.TagBranch, repo.TagDocker)
+
+		if h.notifier != nil {
+			err := h.notifier.SendBuildStart(repo.NameRepo, repo.TagBranch, repo.NameImage)
+			if err != nil {
+				log.Printf("[ERROR] Failed to send build start notification: %v\n", err)
+				return
+			}
+		}
+
+		err := builder.BuildRepository(ctx, cfg, gitClient, h.dockerClient, repo)
+
+		if err != nil {
 			if ctx.Err() == context.Canceled {
 				log.Printf("[INFO] Build canceled for %s\n", repo.URL)
 				return
 			}
 			log.Printf("[ERROR] Build failed for %s: %v\n", repo.URL, err)
+			if h.notifier != nil {
+				h.notifier.SendBuildFailure(repo.NameRepo, repo.TagBranch, err.Error())
+			}
 			return
 		}
 
 		log.Printf("[SUCCESS] Build completed for %s\n", repo.URL)
+		if h.notifier != nil {
+			h.notifier.SendBuildSuccess(repo.NameRepo, repo.TagBranch, repo.NameImage)
+		}
 	}()
 
 	w.Header().Set("Content-Type", "application/json")
@@ -297,6 +319,15 @@ func (h *APIHandler) StopBuild(w http.ResponseWriter, r *http.Request) {
 		cancelFunc()
 		delete(h.buildContexts, req.RepoIndex)
 		h.buildContextsMu.Unlock()
+
+		repo := cfg.Repositories[req.RepoIndex]
+		// repoName := builder.GetRepoName(&repo)
+		// imageName := builder.GetImageName(cfg.DockerHub.Username, repoName, repo.TagBranch, repo.TagDocker)
+
+		if h.notifier != nil {
+			h.notifier.SendBuildStop(repo.NameRepo, repo.TagBranch, repo.NameImage)
+		}
+
 		log.Printf("[INFO] Build stopped for repo index %d", req.RepoIndex)
 	} else {
 		h.buildContextsMu.Unlock()
