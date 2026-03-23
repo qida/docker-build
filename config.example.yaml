@@ -19,7 +19,17 @@ proxy:
   http: "http://192.168.100.3:2080"
   https: "http://192.168.100.3:2080"
   no_proxy: "localhost,127.0.0.1"
-
+notify:
+    ntfy:
+        enabled: true
+        url: https://ntfy.cn
+        topic: docker-build
+        token: tk_zeebvxsp8dnqruxxxxxx
+    dingtalk:
+        enabled: false
+        webhook: https://oapi.dingtalk.com/robot/send?access_token=6b56f336821992a7033321d6d521111111xxxxxxxxxx
+        client_id: dingvte8dxxxxxxx
+        client_secret: d6Vg0cNHApuS__xxxxxxx73q
 repositories:
   - url: "https://github.com/sipeed/picoclaw" #仓库地址，目前只支持Github仓库
     name_task: "picoclaw"

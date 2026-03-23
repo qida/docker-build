@@ -2,7 +2,6 @@ package scheduler
 
 import (
 	"context"
-	"fmt"
 	"log"
 	"time"
 
@@ -55,15 +54,9 @@ func buildRepositoryTaskWithNotify(cfg *config.Config, gitClient *git.GitClient,
 	taskCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
-	repoName := repo.NameTask
-	if repoName == "" {
-		repoName = repo.URL
-	}
-
-	imageName := fmt.Sprintf("%s:%s", repoName, repo.TagDocker)
-
+  
 	if notifier != nil {
-		notifier.SendBuildStart(repoName, repo.TagBranch, imageName)
+		notifier.SendBuildStart(repo.NameRepo, repo.TagBranch, repo.NameImage)
 	}
 
 	err := builder.BuildRepository(taskCtx, cfg, *gitClient, dockerClient, repo)
@@ -72,17 +65,17 @@ func buildRepositoryTaskWithNotify(cfg *config.Config, gitClient *git.GitClient,
 		if taskCtx.Err() == context.DeadlineExceeded {
 			log.Printf("[ERROR] Build timed out for %s after %v\n", repo.URL, timeout)
 			if notifier != nil {
-				notifier.SendBuildFailure(repoName, repo.TagBranch, "build timeout")
+				notifier.SendBuildFailure(repo.NameRepo, repo.TagBranch, "build timeout")
 			}
 		} else {
 			log.Printf("[ERROR] Failed to build: %v\n", err)
 			if notifier != nil {
-				notifier.SendBuildFailure(repoName, repo.TagBranch, err.Error())
+				notifier.SendBuildFailure(repo.NameRepo, repo.TagBranch, err.Error())
 			}
 		}
 	} else {
 		if notifier != nil {
-			notifier.SendBuildSuccess(repoName, repo.TagBranch, imageName)
+			notifier.SendBuildSuccess(repo.NameRepo, repo.TagBranch, repo.NameImage)
 		}
 	}
 }
